@@ -30,7 +30,7 @@ Three places hold the configuration, and they do not overlap:
 
 Accounts:
 
-- A GitHub account that can administer the repo (`spbila2/bakery-copilot`).
+- A GitHub account that can administer the repo (`spbila2/council-finance-assistant`).
 - A Railway account. The Hobby plan covers the $4 to $6 a month this needs (README, "Cost").
 - An Anthropic Console account with an API key from https://platform.claude.com/settings/keys. The model bill is separate from Railway's.
 
@@ -160,13 +160,13 @@ railway add --database postgres
 
 ### Step 2: let Railway's GitHub app see the repo
 
-Open https://github.com/apps/railway-app/installations/new (the same page as Railway → Account Settings → Integrations → GitHub → Configure). Pick the account that owns the repo, choose **Only select repositories** → `bakery-copilot`, save.
+Open https://github.com/apps/railway-app/installations/new (the same page as Railway → Account Settings → Integrations → GitHub → Configure). Pick the account that owns the repo, choose **Only select repositories** → `council-finance-assistant`, save.
 
-Do this before step 3. A service created while the app has no access keeps the repo as its source but gets no push trigger, and installing the app later does not add one: builds from GitHub fail with `Repository "spbila2/bakery-copilot" not found or is not accessible`, and a push to `main` deploys nothing, silently. If the services already exist, reconnect each one once the app has access; the command creates the trigger and starts a build of `main` at once:
+Do this before step 3. A service created while the app has no access keeps the repo as its source but gets no push trigger, and installing the app later does not add one: builds from GitHub fail with `Repository "spbila2/council-finance-assistant" not found or is not accessible`, and a push to `main` deploys nothing, silently. If the services already exist, reconnect each one once the app has access; the command creates the trigger and starts a build of `main` at once:
 
 ```bash
-railway service source connect --repo spbila2/bakery-copilot --branch main --service web
-railway service source connect --repo spbila2/bakery-copilot --branch main --service digest
+railway service source connect --repo spbila2/council-finance-assistant --branch main --service web
+railway service source connect --repo spbila2/council-finance-assistant --branch main --service digest
 ```
 
 Step 6 has the workaround for a repo the app cannot see at all (`railway up`).
@@ -174,8 +174,8 @@ Step 6 has the workaround for a repo the app cannot see at all (`railway up`).
 ### Step 3: the two services
 
 ```bash
-railway add --service web --repo spbila2/bakery-copilot --branch main
-railway add --service digest --repo spbila2/bakery-copilot --branch main
+railway add --service web --repo spbila2/council-finance-assistant --branch main
+railway add --service digest --repo spbila2/council-finance-assistant --branch main
 ```
 
 Each starts a build at once. That first deploy fails or boots in local mode (no variables yet); ignore it. The next deploy replaces it.
@@ -311,11 +311,11 @@ railway logs --service digest -d -n 20
 
 `web`'s first start seeds 76 budget lines, 29 suppliers and 565 made-up history invoices, which can take up to a minute (the health timeout is 120 s). `railway logs --service web -d -n 50` shows it as one line, `seed report: schema_version: 4, budget_seeded: 76, suppliers_seeded: 29, invoices_seeded: 565`. Later deploys print `0` for all three counts: the seed only fills empty tables.
 
-Last, if the evals should run in CI: `gh secret set ANTHROPIC_API_KEY --repo spbila2/bakery-copilot` asks for the value without echoing it. Without the secret the evals job prints "skipped" and only the tests gate the merge.
+Last, if the evals should run in CI: `gh secret set ANTHROPIC_API_KEY --repo spbila2/council-finance-assistant` asks for the value without echoing it. Without the secret the evals job prints "skipped" and only the tests gate the merge.
 
 ## 5. The same steps in the dashboard
 
-For whoever prefers clicking. Project → **+ New** → **Database** → PostgreSQL. **+ New** → **GitHub Repo** → `bakery-copilot` (the repo; this is where the app-access prompt from step 2 appears) → rename the service to `web`; the same again for `digest`. Service → **Variables** → **Raw Editor** → paste `NAME=value` lines, references included → **Deploy** the staged changes from the banner. Until you press it, nothing is applied, and `railway variable list` does not show the staged values. Service → **Settings** → **Networking** → **Generate Domain**.
+For whoever prefers clicking. Project → **+ New** → **Database** → PostgreSQL. **+ New** → **GitHub Repo** → `council-finance-assistant` (the repo; this is where the app-access prompt from step 2 appears) → rename the service to `web`; the same again for `digest`. Service → **Variables** → **Raw Editor** → paste `NAME=value` lines, references included → **Deploy** the staged changes from the banner. Until you press it, nothing is applied, and `railway variable list` does not show the staged values. Service → **Settings** → **Networking** → **Generate Domain**.
 
 Do not set the start command, health check, cron schedule or restart policy by hand under Settings → Deploy: the file is the record, `railway config plan` reports hand edits as drift, and the next `railway config apply` undoes them. Change the file instead (section 6).
 
@@ -372,7 +372,7 @@ Expect `29115`. `railway ssh --service web -- python -m app.digest` prints the d
 | Symptom | Cause | Fix |
 |---|---|---|
 | Build log: `Repository "…" not found or is not accessible` | Railway's GitHub app has no access to the private repo | section 4 step 2; meanwhile `railway up --service web --ci` from a clean `main` |
-| A push to `main` starts no build, although the app has access and the service shows the repo as its source | the service has no push trigger: it was created before the app had access, and the trigger is not added retroactively | `railway service source connect --repo spbila2/bakery-copilot --branch main --service web`, and the same for `digest` |
+| A push to `main` starts no build, although the app has access and the service shows the repo as its source | the service has no push trigger: it was created before the app had access, and the trigger is not added retroactively | `railway service source connect --repo spbila2/council-finance-assistant --branch main --service web`, and the same for `digest` |
 | Deploy log: `RuntimeError: Missing required variables in production: APP_PASSWORD, …` | `APP_ENV=production` is set on that service but the named variables are not | set them (on `digest`, as `${{web.NAME}}`), then redeploy |
 | `/health` is 503 with `"problems": ["ANTHROPIC_API_KEY missing"]` | the key is not set on `web`, or was pasted in the dashboard and never deployed | Variables → check → **Deploy**; or `railway redeploy --service web --yes` |
 | `/health` is 503 with `"problems": ["db: …"]` | `DATABASE_URL` is not the reference, or the database service is not named `Postgres` | set `DATABASE_URL=${{Postgres.DATABASE_URL}}` |
