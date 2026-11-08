@@ -1,4 +1,4 @@
-"""Bakery Copilot backend: the API, the static UI, the health check, the digest hook.
+"""Council finance assistant backend: the API, the static UI, the health check, the digest hook.
 
 One service does everything (architecture.md, "Where things run"). The agent
 loop itself lives in agent.py; this file is doors, locks and plumbing.

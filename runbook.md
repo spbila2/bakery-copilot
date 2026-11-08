@@ -11,7 +11,7 @@ Written while everything works. Each entry is a sequence: click here, run this, 
 ## Model errors (replies fail with "try again in a minute")
 
 1. Check `https://status.anthropic.com`. If there is an incident, wait; the SDK already retries 429/529.
-2. Check the day cap: `GET /api/stats` (signed in). If `spend_today_usd ≥ daily_cap_usd`, the app is doing its job; raise `DAILY_CAP_USD` in Variables only if Dana agrees to the cost.
+2. Check the day cap: `GET /api/stats` (signed in). If `spend_today_usd ≥ daily_cap_usd`, the app is doing its job; raise `DAILY_CAP_USD` in Variables only if the finance manager agrees to the cost.
 3. Check the key: `/health` says `ANTHROPIC_API_KEY missing` if the variable was lost. Set it in Variables and redeploy.
 4. Look at the `runs` table for `status = 'error'` and the `error` column.
 
@@ -32,16 +32,16 @@ Written while everything works. Each entry is a sequence: click here, run this, 
 ## Database restore
 
 1. Railway → Postgres → **Backups** → pick the snapshot → restore into the **staging** environment's database.
-2. Point a staging deploy at it; open the app; check Invoices and a sales question.
+2. Point a staging deploy at it; open the app; check Invoices and a budget question.
 3. Promote: restore into production in the same way, during a quiet hour; redeploy the web service.
 
 ## Deploy is stuck or the health check never passes
 
-1. Logs → look for the seed report (`sales_seeded: 29115`). A first deploy seeds the sales table and can take a minute; the health check timeout is 120 s.
+1. Logs → look for the seed report (`invoices_seeded: 565`). A first deploy seeds the budget, supplier and invoice tables and can take a minute; the health check timeout is 120 s.
 2. If the database URL is wrong, `/health` returns 503 with `db:` in `problems`. Check the `DATABASE_URL` reference variable.
 3. Rollback to the previous deploy if users are waiting; fix in a PR.
 
 ## Who to call
 
-- You (the implementer), then Dana (owner, decides on cost and data).
+- You (the implementer), then the finance manager (owner, decides on cost and data).
 - Railway status: `https://status.railway.com` · Anthropic status: `https://status.anthropic.com`.

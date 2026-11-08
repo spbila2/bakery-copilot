@@ -1,4 +1,4 @@
-# architecture.md — Bakery Copilot
+# architecture.md — Council Finance Assistant
 
 The drawing, where each box runs, the limits, and every decision with its reason. Keep it current in the same commit as the change.
 
@@ -86,3 +86,4 @@ One Railway project, three things in it: the **web service**, built by Railway's
 | 2026-11-09 | The bakery `sales` table and `sales_query` are removed; spending questions run on `invoices` joined to `budget_lines` | The council has no sales; the budget is annual, so date filters cut invoices only and `remaining` = year budget minus invoices in the dates | A monthly budget phasing is added to the data |
 | 2026-11-09 | The eval runner clears only invoices it made, never the `history-` rows | The history now lives in the same table as live invoices; wiping it would empty every spending answer | History moves to its own table |
 | 2026-11-09 | The ₪5,000 flag is replaced by a per-supplier range (typical ± the line's allowed deviation) and an over-budget check | One fixed threshold means nothing across suppliers whose invoices run from ₪2,000 to ₪200,000 | The ranges produce too many false flags in the first week → widen the deviation in `budget_lines.csv` |
+| 2026-11-09 | The repository stays public while the budget file is real but cleared as non-confidential by its owner, and every invoice is made up | A public repo is what the course asks for; real supplier invoices or payroll would change that | Any real invoice, employee or supplier contract data is added → make the repository private first |
