@@ -88,7 +88,7 @@ def run_case(case: dict, client) -> dict:
                 status = "error"
                 text_parts.append(f"[error: {ev['message']}]")
         invoices = [{"supplier": i.supplier, "invoice_number": i.invoice_number, "amount": i.amount, "status": i.status,
-                     "flagged": i.flagged, "source_ref": i.source_ref} for i in db.query(Invoice).filter(or_(Invoice.source_ref.is_(None), ~Invoice.source_ref.like("history-%"))).all()]
+                     "flagged": i.flagged, "chapter": i.chapter, "flag_reason": i.flag_reason, "source_ref": i.source_ref} for i in db.query(Invoice).filter(or_(Invoice.source_ref.is_(None), ~Invoice.source_ref.like("history-%"))).all()]
     return {"answer": "".join(text_parts), "tools": tools, "invoices": invoices, "usage": usage, "cost": cost, "status": status}
 
 
@@ -116,7 +116,9 @@ def grade_facts(case: dict, result: dict) -> list[str]:
             row = rows[-1]
             if "supplier_contains" in want and want["supplier_contains"].lower() not in (row["supplier"] or "").lower():
                 failures.append(f"supplier {row['supplier']!r} does not contain {want['supplier_contains']!r}")
-            for key in ("status", "flagged", "amount"):
+            if "flag_reason_contains" in want and want["flag_reason_contains"] not in (row.get("flag_reason") or ""):
+                failures.append(f"invoice.flag_reason = {row.get('flag_reason')!r}, expected it to contain {want['flag_reason_contains']!r}")
+            for key in ("status", "flagged", "amount", "chapter"):
                 if key in want and row.get(key) != want[key]:
                     failures.append(f"invoice.{key} = {row.get(key)!r}, expected {want[key]!r}")
     if "invoice_count_for_source_ref" in exp:
