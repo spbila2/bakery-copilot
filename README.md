@@ -1,6 +1,8 @@
-# Bakery Copilot
+# Council Finance Assistant (עוזר הכספים)
 
-A chat app for one bakery chain, built the Lesson 9 way: a chat UI, a backend with an agent loop and three tools, Postgres, and a morning digest, all on Railway for a few dollars a month. Staff ask about sales and log supplier invoices from a photo.
+A Hebrew, right-to-left chat app for the finance staff of a religious council, built the Lesson 9 way: a chat UI, a backend with an agent loop and three tools, Postgres, and a morning digest, all on Railway for a few dollars a month. Staff ask about the 2025 budget and what was spent, and log supplier invoices from a photo; each invoice is matched to a supplier and a budget line and checked against the supplier's usual amount and the line's annual budget. Nothing is paid or approved by the assistant.
+
+It started as the course's bakery project and was reworked: new data (the council's budget, 29 suppliers, a made-up invoice history), new tools (`budget_query` replaces `sales_query`), new invoice rules, a Hebrew prompt and UI, and a new logo. The original is [MaceTenth/bakery-copilot](https://github.com/MaceTenth/bakery-copilot).
 
 The plan lives in five files: [spec.md](spec.md) (what), [architecture.md](architecture.md) (how and where), [practice.md](practice.md) (how we work), [runbook.md](runbook.md) (when it breaks), [docs/tickets.md](docs/tickets.md) (the work, as issues). `CLAUDE.md` points Claude Code at the first three.
 
@@ -27,9 +29,9 @@ uvicorn app.main:app --reload
 
 If PowerShell refuses to run `Activate.ps1` ("running scripts is disabled on this system"), run `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser` once, or skip activation and start each command with `.venv\Scripts\python -m`, for example `.venv\Scripts\python -m uvicorn app.main:app --reload`.
 
-Open http://localhost:8000, type a name and the password. The first start seeds SQLite with the 29,115-line sales dataset and 10 suppliers (a few seconds).
+Open http://localhost:8000, type a name and the password. The first start seeds SQLite with the 76 budget lines, 29 suppliers and 565 made-up history invoices (a few seconds).
 
-Try: "What sold best in the last week of August 2026?", "Revenue by branch for August 2026", or attach an invoice photo.
+Try: "מה התקציב לכל פרק ב-2025?", "כמה נשאר בתקציב החשמל של המקוואות?", or attach an invoice photo.
 
 ## Tests and evals
 
@@ -47,12 +49,12 @@ Tests prove the deterministic parts (parsing, dedup, limits, streaming, the tool
 
 The short version follows; the full walkthrough for macOS, Linux and Windows, with every variable and secret, the CLI commands, the dashboard path, day-two operations and troubleshooting, is [docs/deploy-railway.md](docs/deploy-railway.md).
 
-1. **Repo.** Push this folder to a private GitHub repo. Create the issues with `scripts/create_issues.sh` if you want the board (a bash script: on Windows, run it from Git Bash).
-2. **Project and services.** With the CLI (`brew install railway` on macOS, `scoop install railway` on Windows): `railway login`, `railway init --name bakery-copilot`, `railway add --database postgres`, then `railway add --service web --repo <owner>/bakery-copilot --branch main` and the same with `--service digest`. Railway's GitHub app needs access to the repo (Railway → Account Settings → Integrations → GitHub), or builds from GitHub fail with "repository not accessible".
+1. **Repo.** Push this folder to your GitHub repo. Create the open issues with `scripts/create_issues.sh` if you want the board (a bash script: on Windows, run it from Git Bash).
+2. **Project and services.** With the CLI (`brew install railway` on macOS, `scoop install railway` on Windows): `railway login`, `railway init --name council-finance`, `railway add --database postgres`, then `railway add --service web --repo spbila2/bakery-copilot --branch main` and the same with `--service digest`. Railway's GitHub app needs access to the repo (Railway → Account Settings → Integrations → GitHub), or builds from GitHub fail with "repository not accessible".
 3. **Settings from code.** Once: `npm install --prefix .railway`. Then from the repo root `railway config plan` and `railway config apply`: `.railway/railway.ts` sets both start commands, the `/health` check, restart policies and the digest's cron schedule (`30 4 * * *`, UTC; 07:30 Israel in summer, 06:30 in winter). Railpack builds from `requirements.txt` with the Python version in `.python-version`, no Dockerfile.
 4. **Variables** on the web service: `APP_ENV=production`, `APP_PASSWORD`, `APP_SECRET` (`openssl rand -hex 32`, or the PowerShell generator in the guide), `ANTHROPIC_API_KEY`, `DATABASE_URL` as a reference to `${{Postgres.DATABASE_URL}}`, `MODEL=claude-opus-5-5`, `DAILY_CAP_USD=3.00`, `CRON_SECRET`, optionally `DIGEST_WEBHOOK_URL`, `TIMEZONE=Asia/Jerusalem`. Redeploy.
 5. **Digest variables.** The digest service references the web service's values: `APP_ENV=${{web.APP_ENV}}`, and the same for `APP_PASSWORD`, `APP_SECRET`, `ANTHROPIC_API_KEY`, `CRON_SECRET`, `MODEL` and `TIMEZONE`, plus `DATABASE_URL=${{Postgres.DATABASE_URL}}`. Set `DIGEST_WEBHOOK_URL` here if the digest should post somewhere. The service runs for seconds and exits.
-6. **First check.** Open the URL, sign in, ask a sales question, attach an invoice. `GET /health` must be 200. Then run through spec.md §7.
+6. **First check.** Open the URL, sign in, ask a budget question, attach an invoice. `GET /health` must be 200. Then run through spec.md §7.
 
 Deploy on push to `main` is on by default. Rollback is Deployments → previous deploy → Redeploy.
 
@@ -74,7 +76,8 @@ The model is the bill. `HISTORY_LIMIT`, `MODEL_EFFORT` and prompt caching are th
 app/            backend: main.py (API), agent.py (loop), tools/, db.py, auth.py, limits.py, costs.py, digest.py
 app/prompts/    system.md — the agent's job description
 static/         the chat UI (plain HTML, CSS, JS)
-data/           bakery_sales.csv (read-only dataset), suppliers.csv
+data/           budget_lines.csv, suppliers.csv, invoices_history.csv (read-only reference data)
+scripts/        make_invoice_history.py (regenerates the made-up 2025 invoices), create_issues.sh
 tests/          pytest, model mocked
 evals/          cases.yaml, run.py, history.csv
 docs/           tickets.md, watch.md, deploy-railway.md
