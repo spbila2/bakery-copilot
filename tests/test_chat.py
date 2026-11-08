@@ -144,5 +144,5 @@ def test_digest_endpoint_needs_secret(client, logged_in):
     assert client.post("/internal/digest").status_code == 401
     r = client.post("/internal/digest", headers={"X-Cron-Secret": "cron-test"})
     assert r.status_code == 200
-    assert r.json()["text"].startswith("Bakery Copilot —")
+    assert r.json()["text"].startswith("עוזר הכספים · סיכום בוקר")
     assert r.json()["sent"] is False
