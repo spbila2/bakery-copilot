@@ -119,11 +119,11 @@ def test_image_message_carries_a_reference(client, db, logged_in, fake):
     assert user_msg.has_image is True and "[image img_" in user_msg.content
 
 
-def test_system_prompt_names_the_real_branches(client, db):
-    # Issue #3: unnamed, the model made one up ("Haifa") for its examples.
+def test_system_prompt_names_the_real_chapters(client, db):
+    # Issue #3: unnamed, the model made up a branch for its examples. Same risk with budget chapters.
     text = agent_module.build_system(db)[0]["text"]
-    for branch in ("Tel Aviv - Florentin", "Tel Aviv - Dizengoff", "Ramat Gan", "Herzliya"):
-        assert branch in text
+    for chapter in ("נישואין", "קבורה", "מקוואות", "עירובין", "תרבות תורנית", "כשרות", "מנהלה", "פעולות אחרות"):
+        assert chapter in text
     assert "{{" not in text
 
 
@@ -137,7 +137,7 @@ def test_startup_prints_the_seed_report(client, capsys):
     capsys.readouterr()
     with TestClient(app):
         pass
-    assert "seed report: schema_version: 2, budget_seeded: 0, suppliers_seeded: 0, sales_seeded: 0" in capsys.readouterr().out
+    assert "seed report: schema_version: 3, budget_seeded: 0, suppliers_seeded: 0, invoices_seeded: 0" in capsys.readouterr().out
 
 
 def test_digest_endpoint_needs_secret(client, logged_in):

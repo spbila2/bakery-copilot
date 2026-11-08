@@ -6,29 +6,29 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from . import invoices, sales
+from . import budget, invoices
 
 TOOLS: list[dict[str, Any]] = [
     {
-        "name": "sales_query",
+        "name": "budget_query",
         "description": (
-            "Read-only query over the bakery's sales lines (one row per product per order). "
-            "Use it for any question about revenue, items sold, order counts, best sellers, branches, "
-            "channels or trends. Pick a metric and a grouping; filter by date range (YYYY-MM-DD), branch, "
-            "product or category. Refunded lines are excluded unless include_refunded is true. "
+            "Read-only query over the council's 2025 budget and the logged supplier invoices. "
+            "Use it for any question about how much was spent, what is left in the budget, utilization, "
+            "invoice counts, or how spending splits by chapter, sub-item, category, supplier or month. "
+            "The budget is the full year; date filters (YYYY-MM-DD) apply to invoices only. "
             "Never guess numbers: if the answer needs data, call this tool."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "metric": {"type": "string", "enum": sorted(sales.METRICS), "description": "revenue (ILS), items (units), orders (distinct orders) or avg_order (revenue per order)."},
-                "group_by": {"type": "string", "enum": sorted(sales.GROUP_BY), "description": "none for a single total; product/branch/... for a ranking; day/week/month for a trend."},
+                "metric": {"type": "string", "enum": sorted(budget.METRICS), "description": "spent (ILS), budget (ILS, annual), remaining (budget minus spent), utilization (percent of budget spent) or invoice_count."},
+                "group_by": {"type": "string", "enum": sorted(budget.GROUP_BY), "description": "none for one total; chapter/sub_item/category for a split by budget; supplier or month for spending only (no budget exists per supplier or month)."},
+                "chapter": {"type": "string", "description": "substring match on the budget chapter (e.g. מקוואות, קבורה, כשרות, מנהלה)"},
+                "sub_item": {"type": "string", "description": "substring match on the sub-item (e.g. חשמל, ביטוח, ניקיון)"},
+                "category": {"type": "string", "description": "substring match on the category (e.g. אנרגיה ומים, אחזקה וניקיון)"},
+                "supplier": {"type": "string", "description": "substring match on the supplier name"},
                 "date_from": {"type": "string", "description": "inclusive start date YYYY-MM-DD"},
                 "date_to": {"type": "string", "description": "inclusive end date YYYY-MM-DD"},
-                "branch": {"type": "string", "description": "substring match on branch name"},
-                "product": {"type": "string", "description": "substring match on product name"},
-                "category": {"type": "string", "description": "substring match on category (Bread, Pastry, Drinks, Sweet, ...)"},
-                "include_refunded": {"type": "boolean", "default": False},
                 "top_n": {"type": "integer", "minimum": 1, "maximum": 50, "default": 10},
             },
             "required": ["metric", "group_by"],
@@ -37,7 +37,7 @@ TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "lookup_supplier",
-        "description": "Look up a supplier by (partial) name in the bakery's supplier list. Returns the canonical name and the items and usual prices we buy from them. Call it before logging an invoice to normalise the supplier name.",
+        "description": "Look up a supplier by (partial) name in the council's supplier list. Returns the canonical name, the budget line (chapter and sub-item), the payment terms and the usual invoice amount. Call it before logging an invoice to normalise the supplier name.",
         "input_schema": {
             "type": "object",
             "properties": {"name": {"type": "string", "description": "supplier name as written on the invoice"}},
@@ -77,8 +77,8 @@ MAX_RESULT_CHARS = 12000
 def execute(name: str, tool_input: dict[str, Any], db: Session, *, user_id: int | None = None) -> str:
     """Run one tool and return its result as a JSON string for the model."""
     try:
-        if name == "sales_query":
-            result = sales.sales_query(db, **_clean(tool_input))
+        if name == "budget_query":
+            result = budget.budget_query(db, **_clean(tool_input))
         elif name == "lookup_supplier":
             result = invoices.lookup_supplier(db, name=str(tool_input.get("name", "")))
         elif name == "log_invoice":

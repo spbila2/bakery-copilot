@@ -36,6 +36,8 @@ os.environ.setdefault("DAILY_CAP_USD", "1000")
 
 from app import agent as agent_module  # noqa: E402
 from app.config import settings  # noqa: E402
+from sqlalchemy import or_  # noqa: E402
+
 from app.db import Conversation, Invoice, Message, SessionLocal, User, init_db  # noqa: E402
 from app.tools.invoices import log_invoice  # noqa: E402
 
@@ -63,7 +65,8 @@ def _seed_history(db, user: User, turns: list[dict]) -> Conversation | None:
 
 def run_case(case: dict, client) -> dict:
     with SessionLocal() as db:
-        db.query(Invoice).delete()
+        # The seeded 2025 history (source_ref "history-...") stays; only rows made by earlier cases go.
+        db.query(Invoice).filter(or_(Invoice.source_ref.is_(None), ~Invoice.source_ref.like("history-%"))).delete(synchronize_session=False)
         db.commit()
         for inv in case.get("setup_invoices", []):
             log_invoice(db, **inv)
@@ -85,7 +88,7 @@ def run_case(case: dict, client) -> dict:
                 status = "error"
                 text_parts.append(f"[error: {ev['message']}]")
         invoices = [{"supplier": i.supplier, "invoice_number": i.invoice_number, "amount": i.amount, "status": i.status,
-                     "flagged": i.flagged, "source_ref": i.source_ref} for i in db.query(Invoice).all()]
+                     "flagged": i.flagged, "source_ref": i.source_ref} for i in db.query(Invoice).filter(or_(Invoice.source_ref.is_(None), ~Invoice.source_ref.like("history-%"))).all()]
     return {"answer": "".join(text_parts), "tools": tools, "invoices": invoices, "usage": usage, "cost": cost, "status": status}
 
 

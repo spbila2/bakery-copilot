@@ -29,7 +29,7 @@ from .config import ROOT, settings
 from .costs import Usage, cost_usd
 from .db import Conversation, Message, Run, User, utcnow
 from .tools import registry
-from .tools.sales import branches, data_range
+from .tools.budget import chapters, invoice_range
 
 try:  # the SDK is optional at import time so tests run without it configured
     import anthropic
@@ -39,8 +39,8 @@ except ImportError:  # pragma: no cover
 MAX_TOOL_ROUNDS = 6
 SYSTEM_PATH = ROOT / "app" / "prompts" / "system.md"
 FALLBACK_MODELS = {"claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5", "claude-fable-5-1"}
-REFUSAL_TEXT = ("I can't help with that request. If it is about sales or invoices, try rephrasing it; "
-                "for anything else, ask Dana.")
+REFUSAL_TEXT = ("I can't help with that request. If it is about the budget or invoices, try rephrasing it; "
+                "for anything else, ask the finance manager.")
 
 
 # ---------------------------------------------------------------------------
@@ -134,11 +134,11 @@ def get_model_client() -> ModelClient:
 # ---------------------------------------------------------------------------
 
 def build_system(db: Session) -> list[dict]:
-    d_from, d_to = data_range(db)
+    d_from, d_to = invoice_range(db)
     today = datetime.now(ZoneInfo(settings.timezone)).date()
     text = (SYSTEM_PATH.read_text(encoding="utf-8")
             .replace("{{DATA_FROM}}", str(d_from or "unknown")).replace("{{DATA_TO}}", str(d_to or "unknown"))
-            .replace("{{BRANCHES}}", ", ".join(branches(db)) or "unknown")
+            .replace("{{CHAPTERS}}", ", ".join(chapters(db)) or "unknown")
             .replace("{{TODAY}}", today.isoformat()))
     # One cached block: tools + system form the stable prefix every turn reuses.
     return [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]
@@ -181,9 +181,9 @@ def _summarise_result(result_text: str) -> str:
         return f"{'created' if r['created'] else r.get('reason', 'existing')} · {r['status']}" + (" · flagged" if r.get("flagged") else "")
     if "matches" in r:  # lookup_supplier
         return f"{len(r['matches'])} match" + ("" if len(r["matches"]) == 1 else "es")
-    if "row_count" in r:  # sales_query grouped
+    if "row_count" in r:  # budget_query grouped
         return f"{r['row_count']} rows · {r['metric']} by {r['group_by']}"
-    if "value" in r:  # sales_query total
+    if "value" in r:  # budget_query total
         return f"{r['metric']} = {r['value']}"
     return result_text[:90]
 
