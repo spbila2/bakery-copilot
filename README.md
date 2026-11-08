@@ -2,7 +2,7 @@
 
 A Hebrew, right-to-left chat app for the finance staff of a religious council, built the Lesson 9 way: a chat UI, a backend with an agent loop and three tools, Postgres, and a morning digest, all on Railway for a few dollars a month. Staff ask about the 2025 budget and what was spent, and log supplier invoices from a photo; each invoice is matched to a supplier and a budget line and checked against the supplier's usual amount and the line's annual budget. Nothing is paid or approved by the assistant.
 
-It started as the course's bakery project and was reworked: new data (the council's budget, 29 suppliers, a made-up invoice history), new tools (`budget_query` replaces `sales_query`), new invoice rules, a Hebrew prompt and UI, and a new logo. The original is [MaceTenth/bakery-copilot](https://github.com/MaceTenth/bakery-copilot).
+Based on the course's [bakery-copilot](https://github.com/MaceTenth/bakery-copilot) project.
 
 The plan lives in five files: [spec.md](spec.md) (what), [architecture.md](architecture.md) (how and where), [practice.md](practice.md) (how we work), [runbook.md](runbook.md) (when it breaks), [docs/tickets.md](docs/tickets.md) (the work, as issues). `CLAUDE.md` points Claude Code at the first three.
 
