@@ -168,7 +168,12 @@ def _summarise_input(tool_input: dict) -> str:
     return s if len(s) <= 90 else s[:87] + "..."
 
 
+_STATUS_HE = {"logged": "תקינה", "needs_a_look": "דורשת בדיקה"}
+_METRIC_HE = {"spent": "הוצאה", "budget": "תקציב", "remaining": "יתרה", "utilization": "ניצול", "invoice_count": "מספר חשבוניות"}
+
+
 def _summarise_result(result_text: str) -> str:
+    """One short Hebrew line for the tool chip in the UI."""
     try:
         r = json.loads(result_text)
     except Exception:
@@ -176,15 +181,19 @@ def _summarise_result(result_text: str) -> str:
     if not isinstance(r, dict):
         return result_text[:90]
     if "error" in r:
-        return f"error: {str(r['error'])[:80]}"
+        return f"שגיאה: {str(r['error'])[:80]}"
     if "status" in r and "created" in r:  # log_invoice
-        return f"{'created' if r['created'] else r.get('reason', 'existing')} · {r['status']}" + (" · flagged" if r.get("flagged") else "")
+        head = "נרשמה" if r["created"] else ("כבר קיימת" if r.get("reason") == "duplicate" else "קיימת")
+        return f"{head} · {_STATUS_HE.get(r['status'], r['status'])}" + (" · מסומנת" if r.get("flagged") else "")
     if "matches" in r:  # lookup_supplier
-        return f"{len(r['matches'])} match" + ("" if len(r["matches"]) == 1 else "es")
+        n = len(r["matches"])
+        return "לא נמצאה התאמה" if n == 0 else ("נמצאה התאמה" if n == 1 else f"{n} התאמות")
     if "row_count" in r:  # budget_query grouped
-        return f"{r['row_count']} rows · {r['metric']} by {r['group_by']}"
+        return f"{r['row_count']} שורות"
     if "value" in r:  # budget_query total
-        return f"{r['metric']} = {r['value']}"
+        value = r["value"]
+        shown = "אין נתון" if value is None else (f"{value:,.1f}%" if r.get("metric") == "utilization" else f"{value:,.0f}")
+        return f"{_METRIC_HE.get(r.get('metric'), r.get('metric'))}: {shown}"
     return result_text[:90]
 
 
