@@ -13,30 +13,75 @@ def test_parse_amount(raw, expected):
     assert parse_amount(raw) == expected
 
 
+# Electricity (חברת החשמל): typical 20,000, allowed deviation 40% -> usual range 12,000-28,000.
+# Test invoices are dated 2026 so the 2025 budget check stays out of the way, except where it is the point.
+EL = "חברת החשמל"
+Y25 = {"date_from": "2025-01-01", "date_to": "2025-12-31"}
+
+
 def test_log_invoice_same_source_ref_is_one_row(client, db):
-    first = log_invoice(db, supplier="Levi Flour", invoice_number="A-1", amount=1240, source_ref="img_t1")
-    second = log_invoice(db, supplier="Levi Flour", invoice_number="A-1", amount=1240, source_ref="img_t1")
+    first = log_invoice(db, supplier=EL, invoice_number="A-1", amount=20000, invoice_date="2026-01-05", source_ref="img_t1")
+    second = log_invoice(db, supplier=EL, invoice_number="A-1", amount=20000, invoice_date="2026-01-05", source_ref="img_t1")
     assert first["created"] is True
     assert second["created"] is False and second["reason"] == "duplicate"
     assert second["id"] == first["id"]
 
 
 def test_log_invoice_same_supplier_and_number_is_one_row(client, db):
-    a = log_invoice(db, supplier="Golan Dairy", invoice_number="7781", amount=500, source_ref="img_t2a")
-    b = log_invoice(db, supplier="golan dairy", invoice_number="7781", amount=500, source_ref="img_t2b")
-    assert b["created"] is False and b["id"] == a["id"]
+    a = log_invoice(db, supplier=EL, invoice_number="7781", amount=20000, invoice_date="2026-01-06", source_ref="img_t2a")
+    b = log_invoice(db, supplier="החשמל", invoice_number="7781", amount=20000, invoice_date="2026-01-06", source_ref="img_t2b")
+    assert b["created"] is False and b["id"] == a["id"]  # a partial name resolves to the same supplier
+
+
+def test_known_supplier_inside_range_is_logged_clean(client, db):
+    row = log_invoice(db, supplier=EL, invoice_number="C-1", amount="₪20,500", invoice_date="2026-02-01", source_ref="img_t5")
+    assert row["status"] == "logged" and row["flagged"] is False and row["flag_reason"] is None
+    assert (row["chapter"], row["sub_item"]) == ("מקוואות", "חשמל")
+    assert row["expected"] == {"typical": 20000.0, "min": 12000.0, "max": 28000.0, "deviation_pct": 40}
 
 
 def test_unreadable_amount_goes_to_needs_a_look(client, db):
-    row = log_invoice(db, supplier="Negev Eggs", invoice_number="9", amount=None, source_ref="img_t3")
+    row = log_invoice(db, supplier=EL, invoice_number="9", amount=None, invoice_date="2026-02-02", source_ref="img_t3")
     assert row["status"] == "needs_a_look"
-    assert row["amount"] is None
-    assert "amount unreadable" in (row["notes"] or "")
+    assert row["amount"] is None and row["chapter"] == "מקוואות"
+    assert "amount unreadable" in (row["notes"] or "") and "amount_unreadable" in row["flag_reason"]
 
 
-def test_large_amount_is_flagged_not_blocked(client, db):
-    row = log_invoice(db, supplier="Big Oven Ltd", invoice_number="X1", amount="₪6,200", source_ref="img_t4")
-    assert row["status"] == "logged" and row["flagged"] is True and row["amount"] == 6200.0
+def test_amount_outside_the_usual_range_is_flagged_not_blocked(client, db):
+    high = log_invoice(db, supplier=EL, invoice_number="H1", amount=60000, invoice_date="2026-02-03", source_ref="img_t4")
+    assert high["status"] == "logged" and high["flagged"] is True and high["amount"] == 60000.0
+    assert "outside_range" in high["flag_reason"]
+    low = log_invoice(db, supplier=EL, invoice_number="L1", amount=5000, invoice_date="2026-02-04", source_ref="img_t4b")
+    assert low["flagged"] is True and "outside_range" in low["flag_reason"]  # too low is suspicious too
+
+
+def test_unknown_supplier_goes_to_needs_a_look(client, db):
+    row = log_invoice(db, supplier="Negev Eggs", invoice_number="N1", amount=900, invoice_date="2026-02-05", source_ref="img_t6")
+    assert row["status"] == "needs_a_look" and row["chapter"] is None
+    assert "unknown_supplier" in row["flag_reason"] and "new supplier" in row["notes"]
+
+
+def test_a_name_that_matches_several_suppliers_is_not_guessed(client, db):
+    row = log_invoice(db, supplier="ניקיון", invoice_number="K1", amount=140000, invoice_date="2026-02-06", source_ref="img_t7")
+    assert row["status"] == "needs_a_look" and row["chapter"] is None
+    assert "ambiguous_supplier" in row["flag_reason"]
+
+
+def test_invoice_that_breaks_the_annual_budget_is_flagged(client, db):
+    # שכר פלוס: חשבות שכר, budget 149,000. Ask the tool what is left, then log one shekel more.
+    left = budget_query(db, metric="remaining", group_by="none", chapter="מנהלה", sub_item="חשבות שכר", **Y25)["value"]
+    amount = max(1.0, left + 1)
+    row = log_invoice(db, supplier="שכר פלוס", invoice_number="B1", amount=amount, invoice_date="2025-12-20", source_ref="img_t8")
+    try:
+        assert row["status"] == "logged" and row["flagged"] is True
+        assert "over_budget" in row["flag_reason"]
+    finally:  # a 2025 row would shift the totals other tests compare with the history file
+        from app.db import Invoice
+        db.query(Invoice).filter_by(source_ref="img_t8").delete()
+        db.commit()
+    # the same kind of invoice dated outside the budget year is not judged against it
+    other = log_invoice(db, supplier="שכר פלוס", invoice_number="B2", amount=12400, invoice_date="2026-03-01", source_ref="img_t9")
+    assert "over_budget" not in (other["flag_reason"] or "")
 
 
 def test_lookup_supplier_partial_match(client, db):
@@ -45,6 +90,7 @@ def test_lookup_supplier_partial_match(client, db):
     match = res["matches"][0]
     assert (match["chapter"], match["sub_item"]) == ("מקוואות", "חשמל")
     assert match["typical_amount"] == 20000
+    assert (match["allowed_deviation_pct"], match["min_amount"], match["max_amount"]) == (40, 12000.0, 28000.0)
     assert lookup_supplier(db, name="nobody-here")["known_supplier"] is False
 
 
@@ -80,7 +126,6 @@ import csv
 from pathlib import Path
 
 DATA = Path(__file__).resolve().parent.parent / "data"
-Y25 = {"date_from": "2025-01-01", "date_to": "2025-12-31"}
 
 
 def _history():
