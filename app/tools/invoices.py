@@ -21,6 +21,11 @@ from sqlalchemy.orm import Session
 from ..db import BudgetLine, Invoice, Supplier
 
 BUDGET_YEAR = 2025  # the budget file covers one year; the over-budget check applies to invoices of that year
+# Why a row was flagged or needs a look, in words for people (the UI and the digest share these).
+FLAG_REASONS_HE = {
+    "outside_range": "מחוץ לטווח הרגיל של הספק", "over_budget": "חריגה מהתקציב השנתי", "unknown_supplier": "ספק לא מוכר",
+    "ambiguous_supplier": "שם ספק דו-משמעי", "amount_unreadable": "סכום לא קריא",
+}
 _AMOUNT_RE = re.compile(r"[-+]?\d[\d,]*(?:\.\d+)?")
 
 
