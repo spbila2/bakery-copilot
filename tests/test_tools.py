@@ -2,7 +2,7 @@
 import pytest
 
 from app.tools.invoices import log_invoice, lookup_supplier, parse_amount
-from app.tools.sales import sales_query
+from app.tools.budget import budget_query
 
 
 @pytest.mark.parametrize("raw,expected", [
@@ -72,29 +72,70 @@ def test_every_supplier_points_at_exactly_one_budget_line(client, db):
         assert n == 1, (s.code, s.chapter, s.sub_item)
 
 
-def test_sales_query_totals_match_the_dataset(client, db):
-    # The Lesson 4/5 dataset: completed revenue ₪647,065 · 40,194 items · 14,196 completed orders
-    # (14,421 orders in total once refunded lines are included).
-    res = sales_query(db, metric="revenue", group_by="none")
-    assert round(res["revenue"]) == 647065
-    assert res["items"] == 40194
-    assert res["orders"] == 14196
-    everything = sales_query(db, metric="orders", group_by="none", include_refunded=True)
-    assert everything["orders"] == 14421
+# --- budget_query -----------------------------------------------------------------
+# Compared against the CSV files directly, not against the database. Other tests log
+# invoices into the same database, so the history is isolated with its 2025 dates.
+
+import csv
+from pathlib import Path
+
+DATA = Path(__file__).resolve().parent.parent / "data"
+Y25 = {"date_from": "2025-01-01", "date_to": "2025-12-31"}
 
 
-def test_branch_names_are_cleaned_at_the_door(client, db):
-    # The CSV has "Herzliya " with a trailing space; the seed strips it, so there are exactly four branches.
-    res = sales_query(db, metric="revenue", group_by="branch", include_refunded=True)
-    assert res["row_count"] == 4
-    assert sorted(r["key"] for r in res["rows"]) == ["Herzliya", "Ramat Gan", "Tel Aviv - Dizengoff", "Tel Aviv - Florentin"]
+def _history():
+    with (DATA / "invoices_history.csv").open(encoding="utf-8") as f:
+        return [r for r in csv.DictReader(f)]
 
 
-def test_sales_query_ranking_and_filters(client, db):
-    top = sales_query(db, metric="items", group_by="product", top_n=3)
+def test_budget_total_matches_the_budget_file(client, db):
+    res = budget_query(db, metric="budget", group_by="none")
+    assert res["value"] == 22_111_800
+
+
+def test_spent_total_matches_the_history_file(client, db):
+    rows = _history()
+    expected_spent = sum(float(r["amount"]) for r in rows if r["amount"])
+    res = budget_query(db, metric="spent", group_by="none", **Y25)
+    assert res["value"] == round(expected_spent, 2)
+    assert res["invoice_count"] == sum(1 for r in rows if r["amount"])  # unreadable totals are not counted
+    assert res["budget"] == 22_111_800  # date filters never cut the annual budget
+
+
+def test_group_by_chapter_has_the_eight_chapters_and_sums_up(client, db):
+    res = budget_query(db, metric="budget", group_by="chapter", top_n=50)
+    # Invoices logged by other tests have no budget line; they show up as their own group, with no budget.
+    rows = [r for r in res["rows"] if r["key"] != "לא משויך"]
+    assert len(rows) == 8
+    assert rows[0]["key"] == "מקוואות" and rows[0]["budget"] == 17_496_800
+    assert sum(r["budget"] for r in rows) == 22_111_800
+
+
+def test_remaining_and_utilization(client, db):
+    res = budget_query(db, metric="remaining", group_by="none", chapter="מקוואות", sub_item="חשמל", **Y25)
+    assert res["budget"] == 3_497_000
+    assert res["remaining"] == round(res["budget"] - res["spent"], 2)
+    assert res["utilization"] == round(100 * res["spent"] / res["budget"], 1)
+
+
+def test_category_grouping_crosses_chapters(client, db):
+    res = budget_query(db, metric="budget", group_by="category", top_n=50)
+    energy = next(r for r in res["rows"] if r["key"] == "אנרגיה ומים")
+    assert energy["budget"] == 9_445_000  # electricity + water + diesel, in two chapters
+
+
+def test_month_and_supplier_groupings_are_spending_only(client, db):
+    months = budget_query(db, metric="spent", group_by="month", **Y25)
+    assert 1 <= months["row_count"] <= 12 and months["rows"][0]["key"] == "2025-01"
+    assert "budget" not in months["rows"][0]
+    err = budget_query(db, metric="remaining", group_by="supplier")
+    assert "cannot be grouped by supplier" in err["error"]
+    top = budget_query(db, metric="spent", group_by="supplier", top_n=3, **Y25)
     assert top["row_count"] == 3
-    assert top["rows"][0]["value"] >= top["rows"][1]["value"] >= top["rows"][2]["value"]
-    month = sales_query(db, metric="revenue", group_by="branch", date_from="2026-08-01", date_to="2026-08-31")
-    assert 0 < month["row_count"] <= 4
-    assert sales_query(db, metric="nope", group_by="none")["error"].startswith("unknown metric")
-    assert sales_query(db, metric="revenue", group_by="none", date_from="31/08/2026")["error"] == "dates must be YYYY-MM-DD"
+    assert top["rows"][0]["spent"] >= top["rows"][1]["spent"] >= top["rows"][2]["spent"]
+
+
+def test_budget_query_rejects_bad_input(client, db):
+    assert budget_query(db, metric="nope", group_by="none")["error"].startswith("unknown metric")
+    assert budget_query(db, metric="spent", group_by="nope")["error"].startswith("unknown group_by")
+    assert budget_query(db, metric="spent", group_by="none", date_from="31/08/2025")["error"] == "dates must be YYYY-MM-DD"

@@ -21,3 +21,19 @@ def test_case_without_history_is_a_single_turn(client):
     fake = FakeModelClient()
     evals_run.run_case({"id": "t", "input": "Revenue by branch for August 2026"}, fake)
     assert [m["role"] for m in fake.last_messages] == ["user"]
+
+
+def test_eval_runner_keeps_the_seeded_invoice_history(client):
+    # run_case clears the invoices earlier cases made, but must never wipe the 2025 history.
+    from sqlalchemy import func, select
+
+    from app.db import Invoice, SessionLocal
+
+    def history_count():
+        with SessionLocal() as db:
+            return db.scalar(select(func.count()).select_from(Invoice).where(Invoice.source_ref.like("history-%")))
+
+    before = history_count()
+    assert before > 0
+    evals_run.run_case({"id": "t", "input": "hello"}, FakeModelClient())
+    assert history_count() == before
