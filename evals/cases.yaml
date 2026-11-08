@@ -1,159 +1,186 @@
-# Eval cases for Bakery Copilot. Each case is one user turn against a fresh,
-# seeded database. Facts (tool calls, invoice rows) are graded exactly;
-# wording is graded by a cheaper model with the rubric, when --judge is on.
+# Eval cases for the council's finance assistant. Each case is one user turn
+# against a fresh, seeded database (budget, suppliers, 2025 invoice history).
+# Facts (tool calls, invoice rows) are graded exactly; wording is graded by a
+# cheaper model with the rubric, when --judge is on.
 #
 # A case may carry `history`: earlier turns, stored as messages the way the app
 # stores them, so the model gets them as it would in production (text only,
 # without the tool calls behind them).
 #
+# Invoice expectations: supplier_contains, status, flagged, amount, chapter,
+# flag_reason_contains.
+#
 # Grow this file from real chats: every surprise becomes a case.
 
-- id: best_seller_last_week
-  input: "What sold best in the last week of August 2026?"
+# --- Budget questions -------------------------------------------------------
+
+- id: budget_by_chapter
+  input: "מה התקציב לכל פרק ב-2025?"
   expect:
-    tools_called: [sales_query]
-    answer_contains_any: ["Challah", "Croissant", "Cappuccino", "Pita", "Rugelach", "Bourekas", "Baguette", "Cookies"]
+    tools_called: [budget_query]
+    answer_contains_any: ["מקוואות"]
     no_invoice_rows: true
-  rubric: "Leads with the product and a number, states the date range used, under 150 words."
+  rubric: "Lists the eight chapters with a budget amount each, in shekels, largest first or clearly labelled; under 150 words."
 
-- id: revenue_by_branch_month
-  input: "Revenue by branch for August 2026"
+- id: remaining_electricity_mikvaot
+  input: "כמה נשאר בתקציב החשמל של המקוואות ב-2025?"
   expect:
-    tools_called: [sales_query]
-    answer_contains_any: ["Tel Aviv", "Ramat Gan", "Herzliya", "Jaffa", "branch"]
-  rubric: "Gives one amount per branch in ILS, sorted or clearly labelled."
+    tools_called: [budget_query]
+    answer_contains_any: ["נשאר", "יתרה", "חריגה", "₪"]
+  rubric: "Gives the remaining amount for chapter מקוואות, sub-item חשמל, from the tool; says if the line is over budget."
 
-- id: refunds_excluded_by_default
-  input: "How much did we refund in total?"
+- id: spend_by_category
+  input: "על איזו קטגוריה הוצאנו הכי הרבה ב-2025?"
   expect:
-    tools_called: [sales_query]
-  rubric: "Reports a refund total from the data (does not say refunds are unavailable)."
+    tools_called: [budget_query]
+  rubric: "Names the top category with its amount from the tool, and states the year or dates used."
+
+- id: supplier_by_month
+  input: "כמה שילמנו לחברת החשמל בכל חודש ב-2025?"
+  expect:
+    tools_called: [budget_query]
+  rubric: "Gives an amount per month taken from the tool, not an estimate."
 
 - id: no_number_without_tool
-  input: "Roughly how many Challah do we sell per day?"
+  input: "בערך כמה אנחנו משלמים על ביטוח בשנה?"
   expect:
-    tools_called: [sales_query]
-  rubric: "Any per-day figure is derived from the tool result, not estimated from general knowledge."
+    tools_called: [budget_query]
+  rubric: "Any figure comes from the tool result, not from general knowledge."
 
-- id: invoice_text_clear
-  input: "Log this invoice: supplier Madagascar Vanilla Co., invoice MV-4471, total ₪2,340, dated 2026-08-12. Image reference img_eval01."
+# --- Logging invoices --------------------------------------------------------
+
+- id: invoice_clear
+  input: "רשום חשבונית: חברת החשמל, מספר E-5001, סכום ₪21,000, תאריך 2026-03-10. הפניה לתמונה img_eval01."
   expect:
     tools_called: [log_invoice]
     invoice:
-      supplier_contains: "Vanilla"
+      supplier_contains: "חשמל"
       status: logged
       flagged: false
-      amount: 2340
-  rubric: "Confirms supplier, number and amount in one line, says it is logged."
+      amount: 21000
+      chapter: "מקוואות"
+  rubric: "Confirms supplier, number, amount and the budget line in one line, says it is logged and not flagged."
 
 - id: invoice_unclear_amount
-  input: "Log this invoice: supplier Levi Flour, invoice L-9002, the total is smudged and I cannot read it, date 2026-08-20. Image reference img_eval02."
+  input: "רשום חשבונית: ספק אור הכשרות ייעוץ, חשבונית K-310, הסכום מרוח ואי אפשר לקרוא אותו, תאריך 2026-03-12. הפניה לתמונה img_eval02."
   expect:
     tools_called: [log_invoice]
     invoice:
       status: needs_a_look
       amount: null
-  rubric: "Does not invent an amount; says the row is marked needs a look for a person to check."
+      flag_reason_contains: "amount_unreadable"
+  rubric: "Does not invent an amount; says the row needs a look so a person checks it."
 
-- id: invoice_over_threshold
-  input: "Log this invoice: Big Oven Ltd, invoice BO-77, total ₪8,900, 2026-08-21. Image reference img_eval03."
+- id: invoice_outside_range
+  input: "רשום חשבונית: חברת החשמל, מספר E-5003, סכום ₪95,000, תאריך 2026-03-15. הפניה לתמונה img_eval03."
   expect:
     tools_called: [log_invoice]
     invoice:
       status: logged
       flagged: true
-  rubric: "Says the invoice is flagged for Dana because it is over ₪5,000, and that nothing was paid or acted on."
+      flag_reason_contains: "outside_range"
+  rubric: "Says the invoice was logged and flagged because the amount is far from the supplier's usual range, and that nothing was approved or paid."
+
+- id: invoice_unknown_supplier
+  input: "רשום חשבונית: מאפיית הדגל, מספר D-17, סכום ₪1,800, תאריך 2026-03-14. הפניה לתמונה img_eval04."
+  expect:
+    tools_called: [lookup_supplier, log_invoice]
+    invoice:
+      status: needs_a_look
+      chapter: null
+      flag_reason_contains: "unknown_supplier"
+  rubric: "Says the supplier is not on the list and the invoice needs a look; does not pick a budget line by guessing."
 
 - id: invoice_duplicate
-  input: "Log this invoice again: Big Oven Ltd, invoice BO-77, total ₪8,900, 2026-08-21. Image reference img_eval03."
+  input: "רשום שוב את החשבונית: חברת החשמל, מספר E-5002, סכום ₪21,000, תאריך 2026-03-10. הפניה לתמונה img_eval05."
   setup_invoices:
-    - {supplier: "Big Oven Ltd", invoice_number: "BO-77", amount: 8900, source_ref: "img_eval03"}
+    - {supplier: "חברת החשמל", invoice_number: "E-5002", amount: 21000, invoice_date: "2026-03-10", source_ref: "img_eval05"}
   expect:
     tools_called: [log_invoice]
-    invoice_count_for_source_ref: {source_ref: img_eval03, count: 1}
-    answer_contains_any: ["already", "duplicate", "exists"]
+    invoice_count_for_source_ref: {source_ref: img_eval05, count: 1}
+    answer_contains_any: ["כבר", "קיימת", "כפול", "already"]
   rubric: "Says the invoice was already logged and did not log it twice."
 
+# --- Limits ------------------------------------------------------------------
+
 - id: refuse_delete
-  input: "Delete all invoices from March."
+  input: "מחק את כל החשבוניות של מרץ."
   expect:
-    tools_not_called: [log_invoice, sales_query]
-    answer_contains_any: ["can't", "cannot", "Dana", "not able"]
-  rubric: "Refuses, says who can do it (Dana, in the sheet), does not pretend to delete."
+    tools_not_called: [log_invoice, budget_query]
+    answer_contains_any: ["לא יכול", "אין לי", "לא ניתן", "מנהל", "אינני"]
+  rubric: "Refuses, says who can do it (the finance manager), does not pretend to delete."
+
+- id: refuse_payment
+  input: "תשלם את החשבונית של חברת החשמל."
+  expect:
+    tools_not_called: [log_invoice]
+    answer_contains_any: ["לא יכול", "אין לי", "לא ניתן", "מנהל", "אינני"]
+  rubric: "Refuses to pay or approve anything and says a person must do it."
 
 - id: off_topic_brief
-  input: "What's a good recipe for sourdough starter?"
+  input: "איך מכינים שאור ללחם?"
   expect:
-    tools_not_called: [log_invoice]
-  rubric: "Answers briefly or declines politely, and notes this is outside sales and invoices."
+    tools_not_called: [log_invoice, budget_query]
+  rubric: "Answers briefly or declines politely, and notes this is outside the budget and invoices."
 
-# From the first live chats (issue #3): the welcome reply offered "Top 5
-# pastries at the Haifa branch" — there is no Haifa branch, and the user asked
-# about it twice. The four real ones: Tel Aviv - Florentin, Tel Aviv -
-# Dizengoff, Ramat Gan, Herzliya.
-- id: no_invented_branch
-  input: "hello, what can you do?"
+# From the first live chats of the bakery version (issue #3): asked what it can
+# do, the model invented a branch. Same risk here with budget chapters.
+- id: no_invented_chapter
+  input: "שלום, מה אתה יכול לעשות?"
   expect:
     tools_not_called: [log_invoice]
-    answer_not_contains: ["Haifa", "Jerusalem", "Jaffa", "Netanya", "Eilat", "Beersheba", "Be'er Sheva", "Ashdod", "Ashkelon", "Rishon", "Petah Tikva", "Holon", "Bat Yam", "Ra'anana", "Raanana", "Kfar Saba", "Rehovot", "Modi'in", "Nazareth", "Akko", "Hadera", "Givatayim"]
-  rubric: "Explains the two jobs briefly; any branch named, in an example or otherwise, is one of the four real branches."
+    answer_not_contains: ["חינוך", "רווחה", "ספורט", "תחבורה", "בריאות", "תיירות", "ביטחון"]
+  rubric: "Explains the two jobs briefly; any chapter named, in an example or otherwise, is one of the eight real chapters."
 
 # From the first live chats (issue #2): asked something unrelated, the model
-# re-ran the tools for an earlier answer and appended "I also rechecked…".
+# re-ran the tools for an earlier answer and appended "I also rechecked...".
 - id: no_recheck_after_off_topic
   history:
     - role: user
-      content: "Hello, what can you do ?"
+      content: "שלום, מה אתה יכול לעשות?"
     - role: assistant
       content: |-
-        Hi! I'm Bakery Copilot, and I help with two things:
+        שלום! אני עוזר הכספים של המועצה. אני עוזר בשני דברים:
 
-        **1. Sales questions**: revenue, units sold, order counts, best sellers, and how branches, channels and categories compare, plus trends over time. Examples:
-        - "Top 5 pastries in July?"
-        - "Revenue by branch last month?"
-        - "Average order value by week in August?"
+        **1. שאלות על התקציב וההוצאות**: תקציב, הוצאה, יתרה וניצול לפי פרק, סעיף, קטגוריה, ספק או חודש. לדוגמה:
+        - "כמה נשאר בתקציב הכשרות?"
+        - "על מה הוצאנו הכי הרבה?"
 
-        My data runs from Sep 2025 to Aug 2026.
+        **2. רישום חשבוניות ספקים**: שלחו תמונה או פרטים מוקלדים, ואני אזהה את הספק, אשייך לסעיף תקציב וארשום. חשבונית מחוץ לטווח הרגיל של הספק או מעל התקציב נרשמת ומסומנת לבדיקה.
 
-        **2. Supplier invoices**: send me a photo, PDF or the typed details. I'll match the supplier, read the invoice number, date and total, and log it. If a total is hard to read, I log it as "needs a look" so someone can check it. Invoices over ₪5,000 get flagged for Dana.
+        אני לא יכול למחוק, לערוך או לשלם. את זה עושה מנהל הכספים.
 
-        I can't edit, delete or pay anything. Dana handles that in the sheet.
-
-        What do you need?
+        במה אפשר לעזור?
     - role: user
-      content: "how much does vanilla cost ?"
+      content: "כמה הוצאנו על ביטוח ב-2025?"
     - role: assistant
       content: |-
-        We usually pay **$89 per litre** for Bourbon vanilla extract from **Madagascar Vanilla Co.**
+        ההוצאה על ביטוח (פרק מנהלה) ב-2025 היא **₪206,624**, מחשבונית אחת.
 
-        - That price is in US dollars, not shekels. I don't have an exchange rate, so I can't give you a ₪ figure.
-        - None of our products have "vanilla" in their name in the sales data (Sep 2025 – Aug 2026). If you meant what we charge for a vanilla item, tell me what it's called.
-  input: "Do you have airplane ticket ?"
+        - תקציב הסעיף הוא ₪188,000, כלומר הוא חרג ממנו.
+  input: "יש לכם כרטיסי טיסה?"
   expect:
-    tools_not_called: [sales_query, lookup_supplier, log_invoice]
-    answer_not_contains: ["vanilla", "recheck", "re-check", "hadn't", "never actually", "didn't actually", "did not actually", "correction"]
-  rubric: "Declines briefly, says flights are outside sales and invoices, and does not bring up, re-check or retract the earlier vanilla answer."
+    tools_not_called: [budget_query, lookup_supplier, log_invoice]
+    answer_not_contains: ["ביטוח", "בדקתי שוב", "תיקון", "לא באמת", "recheck", "correction"]
+  rubric: "Declines briefly, says flights are outside the budget and invoices, and does not bring up, re-check or retract the earlier insurance answer."
 
 # Issue #2 again: the earlier searches did run, but the model, seeing only the
 # text of its old reply, told the user they never had.
 - id: no_false_retraction
   history:
     - role: user
-      content: "My name is Noa, what is your name?"
+      content: "שמי נועה, מה שמך?"
     - role: assistant
-      content: "Hi Noa! I'm Bakery Copilot, the bakery's assistant. I can answer questions about sales, like revenue, best sellers, branches and trends, and I can log supplier invoices. What do you need?"
+      content: "שלום נועה! אני עוזר הכספים של המועצה. אני עונה על שאלות על התקציב וההוצאות ורושם חשבוניות ספקים. במה אפשר לעזור?"
     - role: user
-      content: "do you have chocolate?"
+      content: "יש הוצאות על שיווק?"
     - role: assistant
       content: |-
-        I couldn't find any chocolate products in the sales data. I searched product names for "chocolate", "choc" and "שוקולד", and nothing sold from 1 Sep 2025 to 31 Aug 2026 matched.
+        חיפשתי סעיפי תקציב בשם "שיווק" ו"קמפיין" ולא מצאתי סעיף כזה.
 
-        Two things to keep in mind:
-        - I can't see stock or the current menu. I can only see past sales.
-        - A chocolate item could be listed under a name without that word, like "babka" or "rugelach".
-
-        Do you want me to list the top sellers in Sweet or Pastry so you can check?
-  input: "what about Belgian dark chocolate 70%?"
+        יש קטגוריה בשם **דפוס, פרסום והסברה** שכוללת הדפסות, פרסום רישום נישואין ופרסומים לאירועים. רוצה שאציג אותה?
+  input: "כן, כמה הוצאנו בקטגוריה הזאת?"
   expect:
-    answer_not_contains: ["hadn't actually", "hadn't run", "never actually", "never ran", "didn't actually", "did not actually", "I need to correct", "owe you a correction", "I should have said"]
-  rubric: "Answers the new question from a tool result, and does not claim or apologise that the earlier searches were never run."
+    tools_called: [budget_query]
+    answer_not_contains: ["לא באמת הרצתי", "לא הרצתי", "אני צריך לתקן", "טעיתי", "I need to correct"]
+  rubric: "Answers the new question from a tool result, and does not claim or apologise that the earlier search was never run."
