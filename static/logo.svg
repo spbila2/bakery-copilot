@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="עוזר הכספים">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0FA596"/>
+      <stop offset="1" stop-color="#2F5FD0"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#g)"/>
+  <!-- three rising bars: the budget -->
+  <rect x="14" y="36" width="9" height="14" rx="2.5" fill="#fff" opacity=".92"/>
+  <rect x="27.5" y="28" width="9" height="22" rx="2.5" fill="#fff" opacity=".92"/>
+  <rect x="41" y="19" width="9" height="31" rx="2.5" fill="#fff" opacity=".92"/>
+  <!-- the coin -->
+  <circle cx="47" cy="15" r="8" fill="#F7B733"/>
+  <text x="47" y="19.2" font-family="Arial, Helvetica, sans-serif" font-size="12" font-weight="700" text-anchor="middle" fill="#6B4300">₪</text>
+</svg>

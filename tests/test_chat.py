@@ -63,13 +63,13 @@ def test_tool_loop_logs_invoice_once_even_when_sent_twice(client, db, logged_in,
     e1 = read_sse(r1)
     tools = [e for e in e1 if e["type"] == "tool"]
     assert [t["status"] for t in tools] == ["start", "done"] and tools[0]["name"] == "log_invoice"
-    assert "needs_a_look" in tools[1]["summary"]
+    assert "דורשת בדיקה" in tools[1]["summary"]
     rows = db.query(Invoice).filter_by(source_ref="img_fixed").all()
     assert len(rows) == 1 and rows[0].status == "needs_a_look"
 
     r2 = client.post("/api/chat", json={"message": "log this invoice please", "conversation_id": e1[0]["conversation_id"]})
     e2 = read_sse(r2)
-    assert any(e["type"] == "tool" and e["status"] == "done" and "duplicate" in e["summary"] for e in e2)
+    assert any(e["type"] == "tool" and e["status"] == "done" and "כבר קיימת" in e["summary"] for e in e2)
     assert db.query(Invoice).filter_by(source_ref="img_fixed").count() == 1
     run = db.query(Run).filter_by(conversation_id=e1[0]["conversation_id"]).order_by(Run.id.desc()).first()
     assert run.tool_calls == 1 and run.input_tokens == 720  # both model calls of the turn are summed
