@@ -27,7 +27,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, rela
 
 from .config import ROOT, settings
 
-SCHEMA_VERSION = 3  # 2: budget_lines added, suppliers re-shaped; 3: invoices carry chapter + sub_item, sales table removed
+SCHEMA_VERSION = 4  # 2: budget_lines, suppliers re-shaped; 3: invoices carry chapter + sub_item, sales removed; 4: invoices.flag_reason
 
 
 def utcnow() -> datetime:
@@ -130,7 +130,8 @@ class Invoice(Base):
     currency: Mapped[str] = mapped_column(String(3), default="ILS")
     invoice_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="logged")  # logged | needs_a_look
-    flagged: Mapped[bool] = mapped_column(Boolean, default=False)  # over the spec threshold
+    flagged: Mapped[bool] = mapped_column(Boolean, default=False)  # logged, but a person should look (see flag_reason)
+    flag_reason: Mapped[str | None] = mapped_column(String(80), nullable=True)  # comma list: outside_range, over_budget, unknown_supplier, ambiguous_supplier, amount_unreadable
     source_ref: Mapped[str | None] = mapped_column(String(120), nullable=True, unique=True)  # the dedup key
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     logged_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)

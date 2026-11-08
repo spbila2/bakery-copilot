@@ -137,7 +137,7 @@ def test_startup_prints_the_seed_report(client, capsys):
     capsys.readouterr()
     with TestClient(app):
         pass
-    assert "seed report: schema_version: 3, budget_seeded: 0, suppliers_seeded: 0, invoices_seeded: 0" in capsys.readouterr().out
+    assert "seed report: schema_version: 4, budget_seeded: 0, suppliers_seeded: 0, invoices_seeded: 0" in capsys.readouterr().out
 
 
 def test_digest_endpoint_needs_secret(client, logged_in):
