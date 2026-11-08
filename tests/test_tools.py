@@ -40,10 +40,36 @@ def test_large_amount_is_flagged_not_blocked(client, db):
 
 
 def test_lookup_supplier_partial_match(client, db):
-    res = lookup_supplier(db, name="vanilla")
+    res = lookup_supplier(db, name="חברת החשמל")
     assert res["known_supplier"] is True
-    assert any("Vanilla" in m["supplier"] for m in res["matches"])
+    match = res["matches"][0]
+    assert (match["chapter"], match["sub_item"]) == ("מקוואות", "חשמל")
+    assert match["typical_amount"] == 20000
     assert lookup_supplier(db, name="nobody-here")["known_supplier"] is False
+
+
+def test_budget_and_suppliers_are_seeded_from_the_council_files(client, db):
+    from sqlalchemy import func, select
+
+    from app.db import BudgetLine, Supplier
+
+    assert db.scalar(select(func.count()).select_from(BudgetLine)) == 76
+    assert db.scalar(select(func.count()).select_from(Supplier)) == 29
+    assert db.scalar(select(func.sum(BudgetLine.budget))) == 22_111_800
+    # a blank amount in the source file stays NULL, not 0
+    blank = db.scalar(select(BudgetLine).where(BudgetLine.sub_item == 'ביקורת רו"ח'))
+    assert blank.budget is None
+
+
+def test_every_supplier_points_at_exactly_one_budget_line(client, db):
+    from sqlalchemy import func, select
+
+    from app.db import BudgetLine, Supplier
+
+    for s in db.scalars(select(Supplier)).all():
+        n = db.scalar(select(func.count()).select_from(BudgetLine).where(
+            BudgetLine.chapter == s.chapter, BudgetLine.sub_item == s.sub_item))
+        assert n == 1, (s.code, s.chapter, s.sub_item)
 
 
 def test_sales_query_totals_match_the_dataset(client, db):

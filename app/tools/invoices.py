@@ -96,11 +96,9 @@ def lookup_supplier(db: Session, *, name: str) -> dict:
             rows = db.scalars(select(Supplier).where(func.lower(Supplier.name).like(f"%{word}%"))).all()
             if rows:
                 break
-    by_name: dict[str, dict] = {}
-    for r in rows:
-        entry = by_name.setdefault(r.name, {"supplier": r.name, "items": []})
-        entry["items"].append({"item": r.item, "unit": r.unit, "price": r.price, "currency": r.currency})
-    return {"matches": list(by_name.values()), "known_supplier": bool(by_name)}
+    matches = [{"supplier": r.name, "code": r.code, "chapter": r.chapter, "sub_item": r.sub_item,
+                "payment_terms": r.payment_terms, "typical_amount": r.typical_amount} for r in rows]
+    return {"matches": matches, "known_supplier": bool(matches)}
 
 
 def recent_invoices(db: Session, limit: int = 50) -> list[dict]:
