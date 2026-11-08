@@ -12,7 +12,7 @@ The drawing, where each box runs, the limits, and every decision with its reason
                              |         tools: sales_query · lookup_supplier · log_invoice
                              v
                           Postgres (Railway plugin)  <---  cron service: python -m app.digest (07:30)
-                          users · conversations · messages · runs · invoices · suppliers · sales
+                          users · conversations · messages · runs · invoices · suppliers · budget_lines · sales
 ```
 
 Four layers, one external dependency. Everything on the left and in the middle is ours and runs on Railway; the model is rented per token.
@@ -34,9 +34,10 @@ Postgres on Railway (`DATABASE_URL` from the plugin); SQLite locally and in test
 | messages | id | role, text only; `has_image` flag; image bytes are never stored |
 | runs | id | one per model turn: tokens, cost_usd, tool_calls, status, duration |
 | invoices | `source_ref` (unique) · (supplier, invoice_number) | the dedup keys; status logged / needs_a_look; flagged |
-| suppliers | id | seeded from data/suppliers.csv |
+| budget_lines | id | 76 sub-items of the council's 2025 budget, seeded from data/budget_lines.csv; key = chapter + sub_item; carries category and allowed deviation % |
+| suppliers | id | 29 suppliers, each tied to one budget line, with payment terms and typical invoice amount; seeded from data/suppliers.csv |
 | sales | id | seeded from data/bakery_sales.csv; read-only through `sales_query` |
-| schema_version | version | 1; created with `create_all` at start |
+| schema_version | version | 2; created with `create_all` at start |
 
 ## Model
 
@@ -81,3 +82,4 @@ One Railway project, three things in it: the **web service**, built by Railway's
 | 2026-10-27 | Infrastructure as Code (`.railway/railway.ts`) instead of `railway.json` | Railway deprecated config-as-code files (they stop working on 2026-12-01); one IaC file describes both services, so the cron service needs no config path of its own | Railway changes the IaC format again, or a setting the DSL cannot express |
 | 2026-11-04 | Chat history is resent as text only; the system prompt says earlier replies were tool-checked and must not be re-checked or retracted unasked | The first live chats showed the model, seeing its old figures without the tool calls behind them, re-running tools on unrelated turns and telling users their searches "never ran" (issue #2). A prompt rule fixes it with no schema change | The eval `no_recheck_after_off_topic` regresses → store a compact tool trace per message and replay it (a schema change, so add Alembic first) |
 | 2026-10-28 | Public repository, history restarted as one commit | No secrets live in the code (they are in Variables) and the dataset is mock data; a fresh history keeps the owner's personal email out, and the old private repo is kept as `bakery-copilot-archive` | Real client data or client-specific configuration has to be committed |
+| 2026-11-09 | Council project: budget lines and suppliers replace the bakery supplier list; an invoice is judged against its supplier's typical amount ± the budget line's allowed deviation | Real 2025 budget of a religious council; the same deviation rule applies to every supplier of a line and is one number to tune | The deviation needs to differ per supplier → move it to `suppliers` |

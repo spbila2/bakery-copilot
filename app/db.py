@@ -27,7 +27,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, rela
 
 from .config import ROOT, settings
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2  # 2: budget_lines added, suppliers re-shaped (council project)
 
 
 def utcnow() -> datetime:
@@ -94,14 +94,29 @@ class Run(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
 
 
+class BudgetLine(Base):
+    """One sub-item of the council's 2025 budget (76 rows). Key: chapter + sub_item."""
+
+    __tablename__ = "budget_lines"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    chapter: Mapped[str] = mapped_column(String(60), index=True)
+    sub_item: Mapped[str] = mapped_column(String(80))
+    category: Mapped[str] = mapped_column(String(60), index=True)
+    budget: Mapped[float | None] = mapped_column(Float, nullable=True)  # blank in the source file stays NULL
+    allowed_deviation_pct: Mapped[int] = mapped_column(Integer)  # invoice may differ from the supplier's typical amount by this much
+
+
 class Supplier(Base):
+    """A supplier tied to one budget line, with the amount its invoices usually have."""
+
     __tablename__ = "suppliers"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    code: Mapped[str] = mapped_column(String(10), unique=True)
     name: Mapped[str] = mapped_column(String(120), index=True)
-    item: Mapped[str] = mapped_column(String(120))
-    unit: Mapped[str] = mapped_column(String(20))
-    price: Mapped[float] = mapped_column(Float)
-    currency: Mapped[str] = mapped_column(String(3))
+    chapter: Mapped[str] = mapped_column(String(60))
+    sub_item: Mapped[str] = mapped_column(String(80))
+    payment_terms: Mapped[str] = mapped_column(String(30))
+    typical_amount: Mapped[float] = mapped_column(Float)
 
 
 class Invoice(Base):
@@ -173,16 +188,33 @@ def init_db(bind=None, data_dir: Path | None = None) -> dict:
     bind = bind or engine
     data_dir = data_dir or (ROOT / "data")
     Base.metadata.create_all(bind)
-    report = {"schema_version": SCHEMA_VERSION, "suppliers_seeded": 0, "sales_seeded": 0}
+    report = {"schema_version": SCHEMA_VERSION, "budget_seeded": 0, "suppliers_seeded": 0, "sales_seeded": 0}
     with Session(bind) as db:
         if db.scalar(select(func.count()).select_from(SchemaVersion)) == 0:
             db.add(SchemaVersion(version=SCHEMA_VERSION))
             db.commit()
+        if db.scalar(select(func.count()).select_from(BudgetLine)) == 0:
+            report["budget_seeded"] = _seed_budget(db, data_dir / "budget_lines.csv")
         if db.scalar(select(func.count()).select_from(Supplier)) == 0:
             report["suppliers_seeded"] = _seed_suppliers(db, data_dir / "suppliers.csv")
         if db.scalar(select(func.count()).select_from(Sale)) == 0:
             report["sales_seeded"] = _seed_sales(db, data_dir / "bakery_sales.csv")
     return report
+
+
+def _seed_budget(db: Session, path: Path) -> int:
+    if not path.exists():
+        return 0
+    rows = []
+    with path.open(encoding="utf-8") as f:
+        for r in csv.DictReader(f):
+            amount = r["budget_2025"].strip()
+            rows.append(BudgetLine(chapter=r["chapter"].strip(), sub_item=r["sub_item"].strip(),
+                                   category=r["category"].strip(), budget=float(amount) if amount else None,
+                                   allowed_deviation_pct=int(r["allowed_deviation_pct"])))
+    db.add_all(rows)
+    db.commit()
+    return len(rows)
 
 
 def _seed_suppliers(db: Session, path: Path) -> int:
@@ -191,8 +223,9 @@ def _seed_suppliers(db: Session, path: Path) -> int:
     rows = []
     with path.open(encoding="utf-8") as f:
         for r in csv.DictReader(f):
-            rows.append(Supplier(name=r["supplier"].strip(), item=r["item"].strip(), unit=r["unit"].strip(),
-                                 price=float(r["price"]), currency=r["currency"].strip().upper()))
+            rows.append(Supplier(code=r["code"].strip(), name=r["name"].strip(), chapter=r["chapter"].strip(),
+                                 sub_item=r["sub_item"].strip(), payment_terms=r["payment_terms"].strip(),
+                                 typical_amount=float(r["typical_amount"])))
     db.add_all(rows)
     db.commit()
     return len(rows)
