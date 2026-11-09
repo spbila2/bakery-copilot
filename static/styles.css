@@ -78,7 +78,8 @@ button:disabled { opacity: .55; cursor: default; box-shadow: none; }
 .main { display: flex; flex-direction: column; min-width: 0; height: 100%; position: relative; background: var(--bg); }
 .main::before { content: ""; position: absolute; inset-inline: 0; top: 0; height: 4px; background: var(--grad); z-index: 2; }
 .topbar { display: flex; justify-content: space-between; align-items: center; padding: 0 24px; min-height: 64px; background: var(--surface); border-bottom: 1px solid var(--line); }
-.topbar h2 { margin: 0; font-size: 18px; font-weight: 700; }
+.topbar h2 { margin: 0; font-size: 18px; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topbar .status { flex: none; margin-inline-start: 12px; }
 .status { font-size: 13px; color: var(--teal); font-weight: 700; }
 
 /* ---------- messages ---------- */
@@ -148,13 +149,17 @@ button:disabled { opacity: .55; cursor: default; box-shadow: none; }
 ::-webkit-scrollbar { width: 9px; } ::-webkit-scrollbar-thumb { background: #C3CFDD; border-radius: 8px; } ::-webkit-scrollbar-track { background: transparent; }
 
 @media (max-width: 900px) {
-  .app { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-  .sidebar { flex-direction: row; align-items: center; overflow-x: auto; }
-  .brand { min-height: auto; padding: 10px 14px; border-bottom: 0; } .brand small { display: none; }
-  .sidebar > .primary { margin: 8px; width: auto; flex: none; }
-  .conversations { flex-direction: row; padding: 8px; } .conversations::before { display: none; }
-  .conversations button { max-width: 150px; }
-  .sidebar-foot { margin-inline-start: auto; border-top: 0; }
+  /* Phone: the sidebar becomes a slim bar on top. The row must be sized explicitly, or the bar collapses. */
+  .app { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+  .sidebar { flex-direction: row; align-items: center; gap: 4px; min-height: 60px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+  .sidebar::-webkit-scrollbar { display: none; }
+  .brand { flex: none; min-height: auto; padding: 8px 10px; border-bottom: 0; } .brand div { display: none; }
+  .sidebar > .primary { margin: 6px 4px; width: auto; flex: none; padding: 8px 12px; }
+  .conversations { flex: 1 0 auto; flex-direction: row; padding: 6px 4px; } .conversations::before { display: none; }
+  .conversations button { max-width: 150px; flex: none; }
+  .sidebar-foot { flex: none; margin-inline-start: auto; border-top: 0; padding: 6px; gap: 2px; }
+  .sidebar-foot button { padding: 8px 10px; }
+  .main { height: auto; min-height: 0; }
   .panel { position: fixed; inset: auto 0 0 0; max-height: 60vh; width: auto; border-inline-start: 0; border-top: 1px solid var(--line); box-shadow: 0 -10px 30px rgba(22,48,75,.15); }
   .msg { padding: 8px 14px; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; }
   .avatar, .avatar.assistant img { width: 34px; height: 34px; }

@@ -30,6 +30,13 @@
   function fmtDate(iso) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ""); return m ? `${m[3]}/${m[2]}/${m[1]}` : ""; }
   function setStatus(text) { $("status").textContent = text || ""; }
   function scrollDown() { const m = $("messages"); m.scrollTop = m.scrollHeight; }
+  // While an answer streams in, keep its first line in view: a long answer must be read from the top,
+  // not from the bottom. A short answer still follows to the bottom, so it stays next to the composer.
+  function followAnswer(el) {
+    const m = $("messages");
+    const top = el.getBoundingClientRect().top - m.getBoundingClientRect().top + m.scrollTop - 12;
+    if (el.offsetHeight + 24 > m.clientHeight) m.scrollTop = top; else scrollDown();
+  }
 
   // ---------- auth ----------
   function showLogin() { $("login").classList.remove("hidden"); $("app").classList.add("hidden"); }
@@ -152,7 +159,7 @@
           const line = raw.split("\n").find((l) => l.startsWith("data: ")); if (!line) continue;
           const ev = JSON.parse(line.slice(6));
           if (ev.type === "meta") { state.current = ev.conversation_id; if (ev.title) $("conv-title").textContent = ev.title; }
-          else if (ev.type === "text") { full += ev.text; body.innerHTML = render(full); scrollDown(); }
+          else if (ev.type === "text") { full += ev.text; body.innerHTML = render(full); followAnswer(bot); }
           else if (ev.type === "tool") {
             const label = TOOL_LABELS[ev.name] || ev.name;
             const c = document.createElement("span"); c.className = `chip tool ${ev.status}`;
