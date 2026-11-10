@@ -34,7 +34,18 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Council Finance Assistant", version="0.1.0", lifespan=lifespan, docs_url=None, redoc_url=None)
-app.mount("/static", StaticFiles(directory=str(ROOT / "static")), name="static")
+class RevalidatedStatic(StaticFiles):
+    """Static files with `Cache-Control: no-cache`: the browser keeps a copy but asks, with the ETag, before using it.
+    Without this a phone keeps an old app.js or styles.css for hours after a deploy (the file's Last-Modified is
+    all it has to go on)."""
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
+app.mount("/static", RevalidatedStatic(directory=str(ROOT / "static")), name="static")
 
 
 # ---------------------------------------------------------------------------
@@ -63,7 +74,7 @@ class ChatIn(BaseModel):
 
 @app.get("/", include_in_schema=False)
 def index():
-    return FileResponse(ROOT / "static" / "index.html")
+    return FileResponse(ROOT / "static" / "index.html", headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/health")
