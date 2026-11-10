@@ -14,13 +14,19 @@ Format: **title** · label · done when.
 6. **Hebrew morning digest with the budget state** · feature · invoices logged, needs a look, flagged with reasons, utilization and lines over budget, chat spend, failed runs. (PR #6)
 7. **Council spec, README and deploy settings** · chore · `spec.md` §7 describes the twelve checks for the council; `.railway/railway.ts` deploys this repository, not the original. (PR #7)
 
-## Open
+## Done after the rework
 
-8. **Run the evals on the real model** · chore · `python -m evals.run --judge` passes at least 80% of the 16 cases; the pass rate is pasted in a PR, and any failing case becomes a prompt fix.
-9. **Deploy to Railway** · chore · the web and digest services run from this repository; `/health` returns 200 on the deployed URL; the seed report line shows 76 / 29 / 565.
-10. **Run the twelve checks of `spec.md` §7 on the deployed URL** · chore · all twelve pass; the screenshots or notes go in the PR.
-11. **Check the phone layout** · chore · the login, chat and invoices panel are usable at 375 px wide.
-12. **Calibrate the made-up history** · chore · no budget line sits at several hundred percent only because of its supplier's typical amount (today "הדפסת כתובות ושונות" is at 239%).
+8. **Run the evals on the real model** · chore · 16 of 16 passed (100%, $0.26, claude-opus-5-5 at medium effort); the row is in `evals/history.csv`.
+9. **Deploy to Railway** · chore · web, digest and Postgres run from this repository; `/health` is 200; the seed report shows 76 / 29 / 565.
+10. **Run the twelve checks of `spec.md` section 7** · chore · all twelve pass; see [submission-check.md](submission-check.md).
+11. **Check the phone layout** · chore · tried on an Android phone; found and fixed a collapsed top bar, a hidden "send" before the photo was ready, buttons too close together, and a stale cached page (PRs 9, 10, 12, 13, 15).
+12. **Auto-scroll, camera, keep-alive** · feature · the chat follows the stream, phones get a camera button, photos are shrunk before sending, the stream sends keep-alive lines (PRs 10, 12, 16).
+13. **Morning digest by email, Sunday to Thursday** · feature · a Make scenario sends it to Gmail; Sunday's covers Thursday to Saturday; the demo history is not counted (PRs 11, 14).
+
+## Not done, by decision
+
+- Calibrating the made-up history: the line "הדפסת כתובות ושונות" shows 239% of its budget, and the owner chose to leave it.
+- Removing the test invoices from the live database: they are made up, so they stay.
 
 ## Later (not scheduled)
 
