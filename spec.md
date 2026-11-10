@@ -13,7 +13,7 @@ A chat app for the finance staff of a religious council: they ask about the 2025
 1. **Answer a budget question** from the budget and the invoices: budget, spent, remaining and utilization, by chapter, sub-item, category, supplier or month. Every number comes from the data, never from memory.
 2. **Log an invoice** from a photo or typed details: supplier, number, amount, date. One invoice becomes one row, tied to its supplier's budget line. An unreadable amount is never guessed; an unknown supplier is never guessed.
 3. **Keep every conversation** so a user can come back to it.
-4. **Send a morning digest**: yesterday's invoices, what needs a look, the flagged ones with reasons, the year's budget state, chat spend.
+4. **Send a morning digest** by email, Sunday to Thursday (Sunday's covers Thursday to Saturday): the period's invoices, what needs a look, the flagged ones with reasons, the year's budget state, chat spend.
 
 ## 3. Not in v1
 

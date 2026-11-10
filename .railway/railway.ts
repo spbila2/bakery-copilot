@@ -36,7 +36,7 @@ export default defineRailway(() => {
     build: { buildEnvironment: "V3", builder: "RAILPACK" },
     deploy: {
       startCommand: "python -m app.digest",
-      cronSchedule: "30 4 * * *",
+      cronSchedule: "30 4 * * 0-4",
       restartPolicyType: "NEVER",
     },
     replicas: { "iad": 1 },
