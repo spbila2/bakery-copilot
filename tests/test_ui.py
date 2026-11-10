@@ -58,3 +58,11 @@ def test_attached_photo_is_visible_and_sending_waits_for_it(client):
     assert "מכין את התמונה" in js
     css = client.get("/static/styles.css").text
     assert "gap: 18px" in css  # the camera and file buttons are no longer touching on a phone
+
+
+def test_the_page_and_its_files_are_revalidated_so_a_phone_never_shows_an_old_version(client):
+    for path in ("/", "/static/app.js", "/static/styles.css", "/static/logo.svg"):
+        r = client.get(path)
+        assert r.status_code == 200 and r.headers["cache-control"] == "no-cache", path
+    etag = client.get("/static/app.js").headers["etag"]
+    assert client.get("/static/app.js", headers={"If-None-Match": etag}).status_code == 304  # cheap when nothing changed
