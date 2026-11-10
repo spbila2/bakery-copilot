@@ -78,7 +78,7 @@ def test_tool_loop_logs_invoice_once_even_when_sent_twice(client, db, logged_in,
 def test_refusal_is_reported_not_hidden(client, db, logged_in, fake):
     fake.turns.append([ModelEvent(type="stop", stop_reason="refusal", usage=Usage(50, 0), content=[])])
     events = read_sse(client.post("/api/chat", json={"message": "do something odd"}))
-    assert any(e["type"] == "text" and "can't help" in e["text"] for e in events)
+    assert any(e["type"] == "text" and "לא יכול לעזור" in e["text"] for e in events)
     conv_id = events[0]["conversation_id"]
     assert db.query(Run).filter_by(conversation_id=conv_id).one().status == "refusal"
 
