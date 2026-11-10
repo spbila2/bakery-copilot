@@ -5,12 +5,14 @@ loop itself lives in agent.py; this file is doors, locks and plumbing.
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text
@@ -74,7 +76,19 @@ class ChatIn(BaseModel):
 
 @app.get("/", include_in_schema=False)
 def index():
-    return FileResponse(ROOT / "static" / "index.html", headers={"Cache-Control": "no-cache"})
+    """The page, with the version of its own files in every asset URL, so a changed file is always fetched anew
+    (a phone cannot keep serving an old app.js), and a small version label the user can read."""
+    static = ROOT / "static"
+    digest = hashlib.sha1()
+    for name in ("app.js", "styles.css", "logo.svg", "index.html"):
+        digest.update((static / name).read_bytes())
+    files_version = digest.hexdigest()[:8]
+    shown = (os.environ.get("RAILWAY_GIT_COMMIT_SHA") or "")[:7] or files_version
+    html = (static / "index.html").read_text(encoding="utf-8")
+    html = (html.replace("/static/app.js", f"/static/app.js?v={files_version}")
+                .replace("/static/styles.css", f"/static/styles.css?v={files_version}")
+                .replace("{{VERSION}}", shown))
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/health")
