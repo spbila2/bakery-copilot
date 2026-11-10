@@ -130,16 +130,55 @@
     });
   }
   function readAsDataUrl(file) { return new Promise((resolve) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.readAsDataURL(file); }); }
-  async function onImagePicked(input) {
-    const file = input.files[0];
-    if (!file) { state.image = null; $("attachment").classList.add("hidden"); return; }
-    for (const other of [$("image"), $("photo")]) if (other !== input) other.value = "";
+  const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+
+  // What is attached is always visible: a thumbnail, the file name and a button to remove it.
+  function showAttachment(name, dataUrl, busy) {
+    $("attachment-name").textContent = busy ? "מכין את התמונה…" : `מצורף: ${name}`;
+    if (dataUrl) $("attachment-thumb").src = dataUrl; else $("attachment-thumb").removeAttribute("src");
+    $("attachment-thumb").classList.toggle("hidden", !dataUrl);
+    $("attachment").classList.remove("hidden");
+  }
+  function clearImage() {
+    state.image = null; state.pending = null;
+    $("image").value = ""; $("photo").value = "";
+    $("attachment").classList.add("hidden");
+    $("send").disabled = state.streaming;
+  }
+  $("attachment-remove").addEventListener("click", clearImage);
+
+  // The picture is prepared in the background (shrunk to JPEG). Sending waits for it, so a message is never
+  // sent without the photo the user can see attached.
+  async function prepareImage(file, input) {
     let dataUrl = await shrinkToJpeg(file);
     let type = "image/jpeg";
-    if (!dataUrl) { dataUrl = await readAsDataUrl(file); type = file.type; }
-    if (dataUrl.length * 0.75 > 5 * 1024 * 1024) { alert("התמונה גדולה מ-5 מ״ב. אפשר לצלם שוב או לבחור תמונה קטנה יותר."); input.value = ""; state.image = null; $("attachment").classList.add("hidden"); return; }
-    state.image = { media_type: type, data: dataUrl.split(",")[1], dataUrl, name: file.name };
-    $("attachment").textContent = `מצורף: ${file.name}`; $("attachment").classList.remove("hidden");
+    if (!dataUrl) {
+      if (!IMAGE_TYPES.includes(file.type)) throw new Error("לא ניתן לקרוא את התמונה. אפשר לצלם שוב או לבחור קובץ JPG או PNG.");
+      dataUrl = await readAsDataUrl(file); type = file.type;
+    }
+    if (dataUrl.length * 0.75 > 5 * 1024 * 1024) throw new Error("התמונה גדולה מ-5 מ״ב. אפשר לצלם שוב או לבחור תמונה קטנה יותר.");
+    return { media_type: type, data: dataUrl.split(",")[1], dataUrl, name: file.name || "תמונה" };
+  }
+  async function onImagePicked(input) {
+    const file = input.files[0];
+    if (!file) { clearImage(); return; }
+    for (const other of [$("image"), $("photo")]) if (other !== input) other.value = "";
+    state.image = null;
+    showAttachment(file.name, null, true);
+    $("send").disabled = true;
+    const job = prepareImage(file, input);
+    state.pending = job;
+    try {
+      const img = await job;
+      if (state.pending !== job) return;  // replaced or removed meanwhile
+      state.image = img; state.pending = null;
+      showAttachment(img.name, img.dataUrl, false);
+    } catch (err) {
+      if (state.pending === job) clearImage();
+      alert(err.message);
+    } finally {
+      if (state.pending === null) $("send").disabled = state.streaming;
+    }
   }
   $("image").addEventListener("change", () => onImagePicked($("image")));
   $("photo").addEventListener("change", () => onImagePicked($("photo")));
@@ -151,6 +190,7 @@
   $("composer").addEventListener("submit", async (e) => {
     e.preventDefault();
     if (state.streaming) return;
+    if (state.pending) { try { await state.pending; } catch (_) {} }  // a photo still being prepared
     const text = $("input").value.trim();
     if (!text && !state.image) return;
     const image = state.image;

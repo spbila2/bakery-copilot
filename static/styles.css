@@ -138,7 +138,10 @@ button:disabled { opacity: .55; cursor: default; box-shadow: none; }
 .attach.camera { display: none; }
 @media (pointer: coarse) { .attach.camera { display: inline-flex; } }
 .attach input { display: none; }
-.attachment { margin: -10px 24px 12px; font-size: 13px; color: var(--teal); font-weight: 700; }
+.attachment { display: flex; align-items: center; gap: 10px; margin: 6px 24px 0; padding: 8px 12px; border: 1.5px solid var(--teal); border-radius: 12px; background: #E6F5F2; font-size: 15px; color: #0B5F57; font-weight: 700; }
+.attachment img { width: 44px; height: 44px; object-fit: cover; border-radius: 8px; flex: none; }
+.attachment span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attachment button { flex: none; background: #fff; border: 1.5px solid #9CCFC8; color: #0B5F57; padding: 6px 12px; border-radius: 10px; font-weight: 800; }
 
 /* ---------- invoices panel ---------- */
 .panel { width: 400px; background: var(--surface); padding: 0 16px 16px; overflow-y: auto; border-inline-start: 1px solid var(--line); }
@@ -174,8 +177,9 @@ button:disabled { opacity: .55; cursor: default; box-shadow: none; }
   .avatar, .avatar.assistant img { width: 34px; height: 34px; }
   .topbar, .composer { padding-inline: 14px; }
   .composer { flex-wrap: wrap; }
-  .attach-row { flex: 1 0 100%; }
-  .attach-row .attach { flex: 1; justify-content: center; }
+  .attach-row { flex: 1 0 100%; gap: 18px; }
+  .attachment { margin-inline: 14px; }
+  .attach-row .attach { flex: 1; justify-content: center; height: 54px; }
   .composer textarea { flex: 1 1 0; min-width: 0; }
   .invoices-btn { font-size: 16px; padding: 9px 14px; }
   .topbar h2 { font-size: 16px; }

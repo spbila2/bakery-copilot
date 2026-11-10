@@ -46,3 +46,15 @@ def test_chat_follows_the_stream_to_the_bottom(client):
     js = client.get("/static/app.js").text
     assert "function followAnswer" in js and "requestAnimationFrame(scrollDown)" in js
     assert "state.follow = true" in js  # every send starts following again
+
+
+def test_attached_photo_is_visible_and_sending_waits_for_it(client):
+    html = client.get("/").text
+    # the chip with thumbnail, name and a remove button sits above the composer, where it cannot be missed
+    assert html.index('id="attachment"') < html.index('id="composer"')
+    assert 'id="attachment-thumb"' in html and 'id="attachment-remove"' in html
+    js = client.get("/static/app.js").text
+    assert "state.pending" in js and "await state.pending" in js  # a message is never sent before its photo is ready
+    assert "מכין את התמונה" in js
+    css = client.get("/static/styles.css").text
+    assert "gap: 18px" in css  # the camera and file buttons are no longer touching on a phone

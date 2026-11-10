@@ -44,6 +44,12 @@
 
       <section id="messages" class="messages" aria-live="polite"></section>
 
+      <div id="attachment" class="attachment hidden" role="status">
+        <img id="attachment-thumb" alt="" width="44" height="44">
+        <span id="attachment-name"></span>
+        <button id="attachment-remove" type="button" aria-label="הסרת התמונה">✕</button>
+      </div>
+
       <form id="composer" class="composer">
         <div class="attach-row">
           <label class="attach camera" title="צילום חשבונית במצלמה">
@@ -58,7 +64,6 @@
         <textarea id="input" rows="1" dir="rtl" placeholder="שאלה על התקציב, או חשבונית…"></textarea>
         <button id="send" type="submit" class="primary">שליחה</button>
       </form>
-      <p id="attachment" class="attachment hidden"></p>
     </main>
 
     <aside id="invoices" class="panel hidden" aria-label="חשבוניות אחרונות">
