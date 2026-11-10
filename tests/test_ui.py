@@ -66,3 +66,14 @@ def test_the_page_and_its_files_are_revalidated_so_a_phone_never_shows_an_old_ve
         assert r.status_code == 200 and r.headers["cache-control"] == "no-cache", path
     etag = client.get("/static/app.js").headers["etag"]
     assert client.get("/static/app.js", headers={"If-None-Match": etag}).status_code == 304  # cheap when nothing changed
+
+
+def test_assets_carry_a_version_and_the_page_shows_which_version_loaded(client):
+    html = client.get("/").text
+    import re
+
+    js = re.search(r'/static/app\.js\?v=([0-9a-f]{8})', html)
+    css = re.search(r'/static/styles\.css\?v=([0-9a-f]{8})', html)
+    assert js and css and js.group(1) == css.group(1)  # one version for the set of files
+    assert "{{VERSION}}" not in html and "גרסה " in html  # the label is filled in
+    assert client.get(f"/static/app.js?v={js.group(1)}").status_code == 200  # a query string still serves the file

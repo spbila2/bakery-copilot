@@ -73,6 +73,7 @@ button:disabled { opacity: .55; cursor: default; box-shadow: none; }
 .conversations button { text-align: start; background: transparent; color: var(--navy-ink); padding: 9px 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; border-radius: 8px; }
 .conversations button:hover { background: rgba(255,255,255,.09); filter: none; }
 .conversations button.active { background: var(--navy-2); color: #fff; box-shadow: inset -3px 0 0 var(--amber); }
+.version { font-size: 12px; color: var(--navy-muted); align-self: center; direction: ltr; unicode-bidi: plaintext; }
 .sidebar-foot { display: flex; justify-content: space-between; gap: 6px; padding: 10px 14px; border-top: 1px solid rgba(255,255,255,.1); }
 
 .main { display: flex; flex-direction: column; min-width: 0; height: 100%; position: relative; background: var(--bg); }
