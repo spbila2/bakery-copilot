@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from app.db import Invoice
-from app.digest import build_digest
+from app.digest import build_digest, digest_period
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 DAY = date(2030, 1, 15)  # a day no other test writes to
@@ -75,4 +75,27 @@ def test_seeded_history_is_not_reported_as_a_days_work(client, db):
         assert build_digest(db, date(2032, 3, 1)).split("\n")[1] == "חשבוניות שנרשמו: 0 · סה״כ ₪0"
     finally:
         db.query(Invoice).filter(Invoice.source_ref == "history-H-1").delete()
+        db.commit()
+
+
+def test_a_digest_covers_yesterday_and_sunday_covers_thursday_to_saturday(client):
+    assert digest_period(date(2030, 1, 7)) == (date(2030, 1, 6), date(2030, 1, 6))  # Monday: Sunday
+    assert digest_period(date(2030, 1, 10)) == (date(2030, 1, 9), date(2030, 1, 9))  # Thursday: Wednesday
+    assert digest_period(date(2030, 1, 6)) == (date(2030, 1, 3), date(2030, 1, 5))  # Sunday: Thursday to Saturday
+
+
+def test_a_multi_day_digest_counts_every_day_in_the_period(client, db):
+    def row(ref, day, amount):
+        return Invoice(supplier="חברת החשמל", chapter="מקוואות", sub_item="חשמל", invoice_number=ref, amount=amount,
+                       status="logged", source_ref=ref, created_at=datetime(2030, 1, day, 10, 0))
+
+    rows = [row("mp-wed", 2, 1000.0), row("mp-thu", 3, 2000.0), row("mp-fri", 4, 3000.0), row("mp-sat", 5, 4000.0), row("mp-sun", 6, 5000.0)]
+    db.add_all(rows)
+    db.commit()
+    try:
+        lines = build_digest(db, date(2030, 1, 3), date(2030, 1, 5)).split("\n")
+        assert lines[0] == "עוזר הכספים · סיכום בוקר · מיום חמישי 03.01 עד יום שבת 05.01.2030"
+        assert lines[1] == "חשבוניות שנרשמו: 3 · סה״כ ₪9,000"  # Thursday, Friday, Saturday; not Wednesday, not Sunday
+    finally:
+        db.query(Invoice).filter(Invoice.source_ref.like("mp-%")).delete(synchronize_session=False)
         db.commit()

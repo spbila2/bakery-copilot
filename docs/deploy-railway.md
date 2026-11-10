@@ -9,7 +9,7 @@ Commands are written for macOS and Linux (zsh or bash). On Windows, use PowerShe
 | Service | What it is | Built from | Runs |
 |---|---|---|---|
 | `web` | the UI and the API, one FastAPI process | this repo, by Railway's Railpack builder from `requirements.txt` and `.python-version` (3.12); no Dockerfile | `uvicorn app.main:app --host 0.0.0.0 --port $PORT`; health check `GET /health`, 120 s; restarts on failure, 5 retries |
-| `digest` | the morning digest, a cron service | the same repo and the same build | `python -m app.digest` at `30 4 * * *` UTC (07:30 Israel in summer, 06:30 in winter); exits in seconds; never restarts |
+| `digest` | the morning digest, a cron service | the same repo and the same build | `python -m app.digest` at `30 4 * * 0-4` UTC (07:30 Israel in summer, 06:30 in winter); exits in seconds; never restarts |
 | `Postgres` | Railway's Postgres plugin on a 500 MB volume | Railway | hands out `DATABASE_URL`; the app rewrites `postgresql://` to `postgresql+psycopg://` itself |
 
 Three places hold the configuration, and they do not overlap:
@@ -382,7 +382,7 @@ Expect `29115`. `railway ssh --service web -- python -m app.digest` prints the d
 | Deploy log: `ModuleNotFoundError: No module named 'main'`, or "no start command" | the start command from `railway.ts` was never applied | `railway config apply --yes` |
 | The build uses Python 3.13 | `.python-version` is missing from the repo root | it must be there with `3.12`; Railpack reads it |
 | The first deploy's health check times out | seeding the tables takes up to a minute | wait for the 120 s timeout; `railway logs --service web -d` shows `invoices_seeded: 565`; later deploys are fast |
-| The digest runs at the wrong hour | cron schedules are UTC | `30 4 * * *` is 07:30 IDT and 06:30 IST; change it in `railway.ts`, plan, apply |
+| The digest runs at the wrong hour | cron schedules are UTC | `30 4 * * 0-4` is 07:30 IDT and 06:30 IST; change it in `railway.ts`, plan, apply |
 | `railway logs --service digest` shows nothing for a run | you are reading another deployment, or output was buffered | `railway cron list --service digest` for the run, then `railway logs <deployment-id> --service digest -d`; keep `PYTHONUNBUFFERED=1` |
 | `railway api` answers "Not Authorized" to GitHub queries | the CLI token cannot see the GitHub integration | use the dashboard for anything about repo access |
 | `railway ssh` or `railway connect Postgres`: `No registered SSH keys found` | the database is private, so both go over SSH, and Railway has no key of yours | `railway ssh keys add` (section 6) |

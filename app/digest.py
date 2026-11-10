@@ -44,10 +44,21 @@ def _over_budget_line(db: Session) -> str:
     return line
 
 
-def build_digest(db: Session, day: date | None = None) -> str:
-    tz = ZoneInfo(settings.timezone)
-    day = day or (datetime.now(tz).date() - timedelta(days=1))
-    start, end = _local_bounds(day)
+def digest_period(today: date) -> tuple[date, date]:
+    """The days a morning digest covers: yesterday. The digest is sent Sunday to Thursday, so Sunday's covers
+    the stretch since the last one, Thursday to Saturday, and nothing falls between two digests."""
+    if today.weekday() == 6:  # Sunday
+        return today - timedelta(days=3), today - timedelta(days=1)
+    yesterday = today - timedelta(days=1)
+    return yesterday, yesterday
+
+
+def build_digest(db: Session, day: date | None = None, last_day: date | None = None) -> str:
+    """The digest for `day` (through `last_day`, if given); with no day, for the period that is due today."""
+    if day is None:
+        day, last_day = digest_period(datetime.now(ZoneInfo(settings.timezone)).date())
+    last_day = last_day or day
+    start, end = _local_bounds(day)[0], _local_bounds(last_day)[1]
 
     # The seeded demo history (source_ref "history-...") is not part of any day's work, whenever it was loaded.
     real = or_(Invoice.source_ref.is_(None), ~Invoice.source_ref.like("history-%"))
@@ -68,7 +79,11 @@ def build_digest(db: Session, day: date | None = None) -> str:
     def who(i: Invoice) -> str:
         return f"{i.supplier} ({i.invoice_number or 'ללא מספר'})"
 
-    lines = [f"עוזר הכספים · סיכום בוקר · יום {DAYS_HE[day.weekday()]} {day.strftime('%d.%m.%Y')}",
+    if day == last_day:
+        when = f"יום {DAYS_HE[day.weekday()]} {day.strftime('%d.%m.%Y')}"
+    else:
+        when = f"מיום {DAYS_HE[day.weekday()]} {day.strftime('%d.%m')} עד יום {DAYS_HE[last_day.weekday()]} {last_day.strftime('%d.%m.%Y')}"
+    lines = [f"עוזר הכספים · סיכום בוקר · {when}",
              f"חשבוניות שנרשמו: {len(logged)} · סה״כ ₪{total:,.0f}",
              f"דורשות בדיקה: {len(needs)}" + (" — " + "; ".join(f"{who(i)}: {_reasons(i) or 'לבדיקה'}" for i in needs[:5]) if needs else ""),
              f"חריגות: {len(flagged)}" + (" — " + "; ".join(f"{who(i)} ₪{i.amount or 0:,.0f}: {_reasons(i) or 'לבדיקה'}" for i in flagged[:5]) if flagged else ""),
