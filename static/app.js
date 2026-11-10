@@ -30,12 +30,15 @@
   function fmtDate(iso) { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ""); return m ? `${m[3]}/${m[2]}/${m[1]}` : ""; }
   function setStatus(text) { $("status").textContent = text || ""; }
   function scrollDown() { const m = $("messages"); m.scrollTop = m.scrollHeight; }
-  // While an answer streams in, keep its first line in view: a long answer must be read from the top,
-  // not from the bottom. A short answer still follows to the bottom, so it stays next to the composer.
-  function followAnswer(el) {
+  // Auto-scroll: new text is followed to the bottom, so nobody scrolls by hand. If the user scrolls up on
+  // purpose to re-read something, following stops until they scroll back near the bottom or send again.
+  state.follow = true;
+  function nearBottom() { const m = $("messages"); return m.scrollHeight - m.scrollTop - m.clientHeight < 80; }
+  function followAnswer() { if (state.follow) requestAnimationFrame(scrollDown); }
+  function watchUserScroll() {
     const m = $("messages");
-    const top = el.getBoundingClientRect().top - m.getBoundingClientRect().top + m.scrollTop - 12;
-    if (el.offsetHeight + 24 > m.clientHeight) m.scrollTop = top; else scrollDown();
+    const check = () => requestAnimationFrame(() => { state.follow = nearBottom(); });
+    for (const ev of ["wheel", "touchmove", "keydown", "mouseup"]) m.addEventListener(ev, check, { passive: true });
   }
 
   // ---------- auth ----------
@@ -111,18 +114,35 @@
   }
 
   // ---------- image attach ----------
-  $("image").addEventListener("change", () => {
-    const file = $("image").files[0];
+  // A phone photo is often 4-10 MB. It is shrunk in the browser to at most 1600 px on the long side (JPEG),
+  // which is plenty to read an invoice, keeps it under the 5 MB limit, and makes the model call cheaper.
+  function shrinkToJpeg(file, maxSide = 1600) {
+    return new Promise((resolve) => {
+      const url = URL.createObjectURL(file); const img = new Image();
+      img.onload = () => {
+        const k = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url); resolve(c.toDataURL("image/jpeg", 0.85));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+      img.src = url;
+    });
+  }
+  function readAsDataUrl(file) { return new Promise((resolve) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.readAsDataURL(file); }); }
+  async function onImagePicked(input) {
+    const file = input.files[0];
     if (!file) { state.image = null; $("attachment").classList.add("hidden"); return; }
-    if (file.size > 5 * 1024 * 1024) { alert("התמונה גדולה מ-5 מ״ב."); $("image").value = ""; return; }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result;
-      state.image = { media_type: file.type, data: dataUrl.split(",")[1], dataUrl, name: file.name };
-      $("attachment").textContent = `מצורף: ${file.name}`; $("attachment").classList.remove("hidden");
-    };
-    reader.readAsDataURL(file);
-  });
+    for (const other of [$("image"), $("photo")]) if (other !== input) other.value = "";
+    let dataUrl = await shrinkToJpeg(file);
+    let type = "image/jpeg";
+    if (!dataUrl) { dataUrl = await readAsDataUrl(file); type = file.type; }
+    if (dataUrl.length * 0.75 > 5 * 1024 * 1024) { alert("התמונה גדולה מ-5 מ״ב. אפשר לצלם שוב או לבחור תמונה קטנה יותר."); input.value = ""; state.image = null; $("attachment").classList.add("hidden"); return; }
+    state.image = { media_type: type, data: dataUrl.split(",")[1], dataUrl, name: file.name };
+    $("attachment").textContent = `מצורף: ${file.name}`; $("attachment").classList.remove("hidden");
+  }
+  $("image").addEventListener("change", () => onImagePicked($("image")));
+  $("photo").addEventListener("change", () => onImagePicked($("photo")));
 
   // ---------- send + stream ----------
   $("input").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("composer").requestSubmit(); } });
@@ -134,14 +154,14 @@
     const text = $("input").value.trim();
     if (!text && !state.image) return;
     const image = state.image;
-    $("input").value = ""; $("input").dir = "rtl"; $("input").style.height = "auto"; state.image = null; $("image").value = ""; $("attachment").classList.add("hidden");
+    $("input").value = ""; $("input").dir = "rtl"; $("input").style.height = "auto"; state.image = null; $("image").value = ""; $("photo").value = ""; $("attachment").classList.add("hidden");
     if ($("messages").querySelector(".empty")) $("messages").innerHTML = "";
     addBubble("user", text || "(תמונת חשבונית)", { imageDataUrl: image ? image.dataUrl : null });
 
     const bot = addBubble("assistant", "");
     const body = bot.querySelector(".body"); body.classList.add("cursor");
     const meta = document.createElement("div"); meta.className = "meta"; bot.querySelector(".msg-body").appendChild(meta);
-    state.streaming = true; $("send").disabled = true; setStatus("חושב…");
+    state.streaming = true; state.follow = true; $("send").disabled = true; setStatus("חושב…");
     let full = "";
     try {
       const res = await fetch("/api/chat", {
@@ -159,7 +179,7 @@
           const line = raw.split("\n").find((l) => l.startsWith("data: ")); if (!line) continue;
           const ev = JSON.parse(line.slice(6));
           if (ev.type === "meta") { state.current = ev.conversation_id; if (ev.title) $("conv-title").textContent = ev.title; }
-          else if (ev.type === "text") { full += ev.text; body.innerHTML = render(full); followAnswer(bot); }
+          else if (ev.type === "text") { full += ev.text; body.innerHTML = render(full); followAnswer(); }
           else if (ev.type === "tool") {
             const label = TOOL_LABELS[ev.name] || ev.name;
             const c = document.createElement("span"); c.className = `chip tool ${ev.status}`;
@@ -173,7 +193,7 @@
     } catch (err) {
       full += `\n\n**שגיאה:** ${err.message}`; body.innerHTML = render(full);
     } finally {
-      body.classList.remove("cursor"); state.streaming = false; $("send").disabled = false; setStatus("");
+      body.classList.remove("cursor"); state.streaming = false; $("send").disabled = false; setStatus(""); followAnswer();
       await loadConversationsQuiet();
     }
   });
@@ -199,6 +219,7 @@
   $("close-invoices").addEventListener("click", () => $("invoices").classList.add("hidden"));
 
   // ---------- boot ----------
+  watchUserScroll();
   (async () => {
     try { state.user = await api("/api/me"); showApp(); await loadConversations(); }
     catch (_) { showLogin(); }

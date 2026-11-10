@@ -31,7 +31,6 @@
       <button id="new-chat" class="primary wide">+ שיחה חדשה</button>
       <nav id="conversations" class="conversations" aria-label="שיחות"></nav>
       <div class="sidebar-foot">
-        <button id="toggle-invoices" class="ghost">חשבוניות</button>
         <button id="logout" class="ghost">יציאה</button>
       </div>
     </aside>
@@ -40,16 +39,23 @@
       <header class="topbar">
         <h2 id="conv-title">שיחה חדשה</h2>
         <span id="status" class="status"></span>
+        <button id="toggle-invoices" class="invoices-btn" type="button"><span aria-hidden="true">🧾</span> חשבוניות</button>
       </header>
 
       <section id="messages" class="messages" aria-live="polite"></section>
 
       <form id="composer" class="composer">
-        <label class="attach" title="צירוף תמונת חשבונית">
-          <input id="image" type="file" accept="image/png,image/jpeg,image/webp,image/gif" aria-label="צירוף תמונת חשבונית">
-          <span aria-hidden="true">📎</span>
-        </label>
-        <textarea id="input" rows="1" dir="rtl" placeholder="שאלה על התקציב, או חשבונית…" required></textarea>
+        <div class="attach-row">
+          <label class="attach camera" title="צילום חשבונית במצלמה">
+            <input id="photo" type="file" accept="image/*" capture="environment" aria-label="צילום חשבונית במצלמה">
+            <span aria-hidden="true">📷</span><span class="txt">צילום</span>
+          </label>
+          <label class="attach" title="צירוף קובץ תמונה של חשבונית">
+            <input id="image" type="file" accept="image/png,image/jpeg,image/webp,image/gif" aria-label="צירוף קובץ תמונה של חשבונית">
+            <span aria-hidden="true">📎</span><span class="txt">צירוף קובץ</span>
+          </label>
+        </div>
+        <textarea id="input" rows="1" dir="rtl" placeholder="שאלה על התקציב, או חשבונית…"></textarea>
         <button id="send" type="submit" class="primary">שליחה</button>
       </form>
       <p id="attachment" class="attachment hidden"></p>
