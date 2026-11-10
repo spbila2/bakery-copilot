@@ -31,3 +31,18 @@ def test_tool_chips_are_summarised_in_hebrew():
     assert s({"row_count": 8, "metric": "budget", "group_by": "chapter"}) == "8 שורות"
     assert s({"metric": "utilization", "value": 87.54}) == "ניצול: 87.5%"
     assert s({"metric": "spent", "value": 1234567.4}) == "הוצאה: 1,234,567"
+
+
+def test_invoices_button_is_in_the_top_bar_and_attach_buttons_are_labelled(client):
+    html = client.get("/").text
+    top = html[html.index('<header class="topbar">'):html.index("</header>")]
+    assert 'id="toggle-invoices"' in top and "חשבוניות" in top  # prominent, not buried in the sidebar foot
+    assert 'id="photo"' in html and 'capture="environment"' in html  # camera capture on phones
+    assert "צילום" in html and "צירוף קובץ" in html
+    assert "required" not in html[html.index('<textarea id="input"'):html.index("</textarea>")]  # a photo alone can be sent
+
+
+def test_chat_follows_the_stream_to_the_bottom(client):
+    js = client.get("/static/app.js").text
+    assert "function followAnswer" in js and "requestAnimationFrame(scrollDown)" in js
+    assert "state.follow = true" in js  # every send starts following again
