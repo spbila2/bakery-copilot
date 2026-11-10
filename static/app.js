@@ -203,12 +203,14 @@
     const meta = document.createElement("div"); meta.className = "meta"; bot.querySelector(".msg-body").appendChild(meta);
     state.streaming = true; state.follow = true; $("send").disabled = true; setStatus("חושב…");
     let full = "";
+    const startedAt = performance.now(); let stage = "שליחה";
     try {
       const res = await fetch("/api/chat", {
         method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ conversation_id: state.current, message: text, image: image ? { media_type: image.media_type, data: image.data } : null }),
       });
       if (!res.ok) { let d = res.statusText; try { d = (await res.json()).detail || d; } catch (_) {} throw new Error(d); }
+      stage = "קבלת התשובה";
       const reader = res.body.getReader(); const decoder = new TextDecoder(); let buffer = "";
       while (true) {
         const { value, done } = await reader.read(); if (done) break;
@@ -231,7 +233,12 @@
         }
       }
     } catch (err) {
-      full += `\n\n**שגיאה:** ${err.message}`; body.innerHTML = render(full);
+      // A dropped connection says little by itself; the detail line is what a bug report needs.
+      const secs = Math.round((performance.now() - startedAt) / 1000);
+      const net = navigator.connection && navigator.connection.effectiveType ? ` · ${navigator.connection.effectiveType}` : "";
+      const detail = `${err.name || "Error"}: ${err.message} · בשלב ${stage} · ${secs} שניות · ${navigator.onLine ? "מחובר לרשת" : "ללא רשת"}${net}`;
+      full += `\n\n**החיבור נקטע לפני שהתשובה הסתיימה.** אפשר לשלוח שוב, וחשבונית שכבר נרשמה לא תירשם פעמיים.\n\n<small>${detail}</small>`;
+      body.innerHTML = render(full);
     } finally {
       body.classList.remove("cursor"); state.streaming = false; $("send").disabled = false; setStatus(""); followAnswer();
       await loadConversationsQuiet();

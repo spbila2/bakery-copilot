@@ -8,6 +8,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import queue
+import threading
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
@@ -33,6 +35,9 @@ async def lifespan(app: FastAPI):
     print("seed report: " + ", ".join(f"{k}: {v}" for k, v in app.state.init_report.items()), flush=True)
     app.state.model_client = get_model_client()
     yield
+
+
+HEARTBEAT_SECONDS = 8  # how long a chat stream may stay silent before a keep-alive line goes out
 
 
 app = FastAPI(title="Council Finance Assistant", version="0.1.0", lifespan=lifespan, docs_url=None, redoc_url=None)
@@ -179,12 +184,48 @@ def chat(payload: ChatIn, request: Request, db: Session = Depends(get_db)):
     client = request.app.state.model_client
 
     def sse():
-        # A dedicated session: the request-scoped one may close before the stream ends.
-        with SessionLocal() as sdb:
-            suser = sdb.get(type(user), user_id)
-            sconv = sdb.get(Conversation, conv_id) if conv_id else None
-            for event in run_turn(sdb, user=suser, conversation=sconv, text=payload.message, image=image, client=client):
-                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        """The agent's events as SSE. The turn runs in a worker thread, and while it is silent (the model is
+        thinking, a tool is running) a comment line goes out every HEARTBEAT_SECONDS. A phone on mobile data, or a
+        proxy in between, drops a connection that stays quiet for too long, and the browser then reports
+        "network error". Comment lines are ignored by the page."""
+        events: queue.Queue = queue.Queue()
+        stop = threading.Event()
+        finished = object()
+
+        def worker():
+            try:
+                # A dedicated session: the request-scoped one may close before the stream ends.
+                with SessionLocal() as sdb:
+                    suser = sdb.get(type(user), user_id)
+                    sconv = sdb.get(Conversation, conv_id) if conv_id else None
+                    turn = run_turn(sdb, user=suser, conversation=sconv, text=payload.message, image=image, client=client)
+                    try:
+                        for event in turn:
+                            if stop.is_set():  # the browser went away: closing the turn records it as aborted
+                                break
+                            events.put(f"data: {json.dumps(event, ensure_ascii=False)}\n\n")
+                    finally:
+                        turn.close()
+            except BaseException as exc:  # handed to the response below, which re-raises it
+                events.put(exc)
+            finally:
+                events.put(finished)
+
+        threading.Thread(target=worker, daemon=True).start()
+        try:
+            while True:
+                try:
+                    item = events.get(timeout=HEARTBEAT_SECONDS)
+                except queue.Empty:
+                    yield ": ping\n\n"
+                    continue
+                if item is finished:
+                    break
+                if isinstance(item, BaseException):
+                    raise item
+                yield item
+        finally:
+            stop.set()
 
     headers = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"}
     return StreamingResponse(sse(), media_type="text/event-stream", headers=headers)

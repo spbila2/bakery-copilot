@@ -146,3 +146,28 @@ def test_digest_endpoint_needs_secret(client, logged_in):
     assert r.status_code == 200
     assert r.json()["text"].startswith("עוזר הכספים · סיכום בוקר")
     assert r.json()["sent"] is False
+
+
+
+def test_a_quiet_stream_sends_keep_alive_lines_and_still_delivers_the_answer(client, logged_in, monkeypatch):
+    # While the model is slow, the connection must not stay silent: a phone or a proxy would cut it ("network error").
+    import time
+
+    from app import main
+
+    class SlowModel(agent_module.FakeModelClient):
+        def stream(self, **kwargs):
+            time.sleep(0.4)
+            yield from super().stream(**kwargs)
+
+    monkeypatch.setattr(main, "HEARTBEAT_SECONDS", 0.05)
+    main.app.state.model_client = SlowModel()
+    try:
+        r = client.post("/api/chat", json={"conversation_id": None, "message": "hello"})
+    finally:
+        main.app.state.model_client = agent_module.FakeModelClient()
+    assert r.status_code == 200
+    assert r.text.count(": ping") >= 3  # silent for 0.4 s with a beat every 0.05 s
+    events = read_sse(r)  # the page parses only data: lines, so the pings are harmless
+    assert events[0]["type"] == "meta" and events[-1]["type"] == "done"
+    assert "".join(e.get("text", "") for e in events if e["type"] == "text").startswith("(fake model)")
