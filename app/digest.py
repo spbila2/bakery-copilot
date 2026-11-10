@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
 from .config import settings
@@ -49,7 +49,9 @@ def build_digest(db: Session, day: date | None = None) -> str:
     day = day or (datetime.now(tz).date() - timedelta(days=1))
     start, end = _local_bounds(day)
 
-    invoices = db.scalars(select(Invoice).where(Invoice.created_at >= start, Invoice.created_at < end)
+    # The seeded demo history (source_ref "history-...") is not part of any day's work, whenever it was loaded.
+    real = or_(Invoice.source_ref.is_(None), ~Invoice.source_ref.like("history-%"))
+    invoices = db.scalars(select(Invoice).where(Invoice.created_at >= start, Invoice.created_at < end, real)
                           .order_by(Invoice.created_at)).all()
     logged = [i for i in invoices if i.status == "logged"]
     needs = [i for i in invoices if i.status == "needs_a_look"]

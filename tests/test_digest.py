@@ -62,3 +62,17 @@ def test_an_empty_day_still_reads_cleanly(client, db):
     assert lines[1] == "חשבוניות שנרשמו: 0 · סה״כ ₪0"
     assert lines[2] == "דורשות בדיקה: 0" and lines[3] == "חריגות: 0"
     assert lines[-1] == "הרצות שנכשלו: 0"
+
+
+def test_seeded_history_is_not_reported_as_a_days_work(client, db):
+    # The history rows are stamped with the day they were loaded; the digest must not count them as that day's invoices.
+    at = datetime(2032, 3, 1, 10, 0)
+    row = Invoice(supplier="חברת החשמל", chapter="מקוואות", sub_item="חשמל", invoice_number="H-1", amount=999999.0,
+                  status="logged", source_ref="history-H-1", created_at=at)
+    db.add(row)
+    db.commit()
+    try:
+        assert build_digest(db, date(2032, 3, 1)).split("\n")[1] == "חשבוניות שנרשמו: 0 · סה״כ ₪0"
+    finally:
+        db.query(Invoice).filter(Invoice.source_ref == "history-H-1").delete()
+        db.commit()
