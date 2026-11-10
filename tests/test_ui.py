@@ -77,3 +77,14 @@ def test_assets_carry_a_version_and_the_page_shows_which_version_loaded(client):
     assert js and css and js.group(1) == css.group(1)  # one version for the set of files
     assert "{{VERSION}}" not in html and "גרסה " in html  # the label is filled in
     assert client.get(f"/static/app.js?v={js.group(1)}").status_code == 200  # a query string still serves the file
+
+
+def test_the_messages_a_user_can_see_are_in_hebrew(client):
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    with TestClient(app) as fresh:  # no session cookie, unlike the shared client
+        wrong = fresh.post("/api/login", json={"name": "tester", "password": "not-the-password"})
+        assert wrong.status_code == 401 and wrong.json()["detail"] == "הסיסמה שגויה."
+        assert fresh.get("/api/invoices").json()["detail"] == "יש להתחבר."

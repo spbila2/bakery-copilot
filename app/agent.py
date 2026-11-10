@@ -39,8 +39,8 @@ except ImportError:  # pragma: no cover
 MAX_TOOL_ROUNDS = 6
 SYSTEM_PATH = ROOT / "app" / "prompts" / "system.md"
 FALLBACK_MODELS = {"claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5", "claude-fable-5-1"}
-REFUSAL_TEXT = ("I can't help with that request. If it is about the budget or invoices, try rephrasing it; "
-                "for anything else, ask the finance manager.")
+REFUSAL_TEXT = ("אני לא יכול לעזור בבקשה הזאת. אם היא קשורה לתקציב או לחשבוניות, אפשר לנסח אותה מחדש. "
+                "לכל דבר אחר, אפשר לפנות למנהל הכספים.")
 
 
 # ---------------------------------------------------------------------------
@@ -200,14 +200,14 @@ def _summarise_result(result_text: str) -> str:
 def _friendly(exc: Exception) -> str:
     if anthropic is not None:
         if isinstance(exc, (anthropic.RateLimitError, getattr(anthropic, "OverloadedError", anthropic.RateLimitError))):
-            return "The model is busy right now. Try again in a minute."
+            return "המודל עמוס כרגע. אפשר לנסות שוב בעוד דקה."
         if isinstance(exc, anthropic.AuthenticationError):
-            return "The model key is not valid. Check ANTHROPIC_API_KEY."
+            return "מפתח ה-API של המודל אינו תקין. יש לבדוק את ANTHROPIC_API_KEY."
         if isinstance(exc, anthropic.APIConnectionError):
-            return "Could not reach the model. Check the connection and try again."
+            return "לא הצלחתי להגיע למודל. אפשר לבדוק את החיבור ולנסות שוב."
         if isinstance(exc, anthropic.BadRequestError):
-            return f"The request was rejected: {exc.message if hasattr(exc, 'message') else exc}"
-    return "Something went wrong on our side. The error was recorded; try again."
+            return f"הבקשה נדחתה: {exc.message if hasattr(exc, 'message') else exc}"
+    return "משהו השתבש אצלנו. השגיאה נרשמה, ואפשר לנסות שוב."
 
 
 def run_turn(db: Session, *, user: User, conversation: Conversation | None, text: str, image: dict | None,
